@@ -10,9 +10,12 @@ import { bmConfig } from './config.js';
 export function VersionTag({ className = '' }) {
   const v = bmConfig().version;
   if (!v) return null;
+  // Colour is set inline (muted grey that reads on both light and dark footers)
+  // so it never depends on the host app scanning this package for Tailwind classes.
   return (
     <div
-      className={`text-center text-[10px] leading-none tracking-wide text-gray-400/70 py-2 select-none ${className}`}
+      className={`text-center leading-none tracking-wide py-2 select-none ${className}`}
+      style={{ color: '#9ca3af', fontSize: '10px' }}
       title="App build version"
     >
       {v}
