@@ -1,6 +1,6 @@
 {
   "name": "@bm/client",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Shared Blockchain Melanesia client — BM IdP auth (phone/email/passkey/QR), Supabase custom-OIDC bridge, Konekt voucher, and the E.164 PhoneInput. Configured once per app via configureBm().",
   "type": "module",
   "main": "src/index.js",

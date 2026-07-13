@@ -12,11 +12,13 @@
 
 export {
   configureBm, bmConfig,
-  supabase, isSupabase, isBM, isVoucherEnabled,
+  supabase, isSupabase, isBM, isVoucherEnabled, isWallet, isSms,
   bmSignIn, bmSignOut,
 } from './config.js';
 
-export * from './auth.js';      // OTP, email, TOTP, WebAuthn, QR, getToken, onAuthChange, currentClaims, decodeJwt, logout
+export * from './auth.js';      // OTP, email, TOTP, WebAuthn, QR, getToken, onAuthChange, currentClaims, lastKnownClaims, setBmName, decodeJwt, logout
 export * from './voucher.js';   // myVouchers, transferVoucher, cashoutVoucher, BUNDLE_LABELS, fmtRemaining, fmtBytes
+export * from './wallet.js';    // balance, payeeBalance, pay, redeemVoucher
+export * from './sms.js';       // send, sendSms
 export { toE164 } from './phone.js';
 export { default as PhoneInput, COUNTRIES, splitE164, isValidPhone } from './PhoneInput.jsx';

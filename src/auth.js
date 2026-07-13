@@ -38,6 +38,26 @@ export function decodeJwt(tok) {
   } catch { return null; }
 }
 export function currentClaims() { ensureRestored(); return access ? decodeJwt(access) : null; }
+export const lastKnownClaims = currentClaims;  // alias used by some apps (Bisnis Stoa)
+
+// Set the caller's display name at the IdP; refreshes so the new token carries
+// the `name` claim. Best-effort, returns bool. (Used by Rentim.)
+export async function setBmName(name) {
+  if (!bmConfig().idpUrl) return false;
+  const tok = await getToken();
+  if (!tok) return false;
+  try {
+    const r = await fetch(`${bmConfig().idpUrl}/me/name`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + tok },
+      body: JSON.stringify({ name }),
+    });
+    if (!r.ok) return false;
+    await doRefresh();   // new token includes the name claim
+    notify();
+    return true;
+  } catch { return false; }
+}
 
 async function call(path, body, headers = {}) {
   const r = await fetch(`${bmConfig().idpUrl}${path}`, {

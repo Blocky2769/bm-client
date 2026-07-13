@@ -15,6 +15,8 @@ export let supabase = null;
 export let isSupabase = false;
 export let isBM = false;
 export let isVoucherEnabled = false;
+export let isWallet = false;
+export let isSms = false;
 
 const norm = u => { const s = String(u || '').trim(); return s.startsWith('<') ? '' : s.replace(/\/$/, ''); };
 
@@ -27,6 +29,8 @@ export function configureBm(c = {}) {
   };
   isBM = !!cfg.idpUrl;
   isVoucherEnabled = !!cfg.idpUrl;           // vouchers ride the IdP proxy
+  isWallet = !!cfg.idpUrl;                   // Konekt Wallet rides the IdP
+  isSms = !!cfg.idpUrl;                       // shared /sms/send rides the IdP
   const ok = cfg.supabaseUrl && cfg.supabaseKey && !cfg.supabaseUrl.includes('your-project');
   supabase = ok
     ? createClient(cfg.supabaseUrl, cfg.supabaseKey, {
