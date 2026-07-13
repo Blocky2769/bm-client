@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 // no `import.meta.env`, and no per-app env-var-name differences (Konekt uses
 // VITE_SUPABASE_ANON_KEY, others VITE_SUPABASE_KEY — the app resolves that and
 // hands us the value).
-let cfg = { app: '', provider: '', idpUrl: '', supabaseUrl: '', supabaseKey: '' };
+let cfg = { app: '', provider: '', version: '', idpUrl: '', supabaseUrl: '', supabaseKey: '' };
 
 // Live bindings — consumers `import { supabase, isBM, … }` and see these update
 // after configureBm() runs (ESM live bindings). configureBm() is called in the
@@ -27,6 +27,7 @@ export function configureBm(c = {}) {
     // (Konekt, Bisnis Stoa) share one `custom:bm` provider — pass `provider` to
     // override. Client ID on that provider must still equal the token `aud` (=app).
     provider:    c.provider || 'custom:' + (c.app || cfg.app || ''),
+    version:     c.version || cfg.version || '',   // build version for the footer tag
     idpUrl:      norm(c.idpUrl),
     supabaseUrl: String(c.supabaseUrl || '').trim(),
     supabaseKey: String(c.supabaseKey || '').trim(),

@@ -22,3 +22,4 @@ export * from './wallet.js';    // balance, payeeBalance, pay, redeemVoucher
 export * from './sms.js';       // send, sendSms
 export { toE164 } from './phone.js';
 export { default as PhoneInput, COUNTRIES, splitE164, isValidPhone } from './PhoneInput.jsx';
+export { VersionTag } from './VersionTag.jsx';
