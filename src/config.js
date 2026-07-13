@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 // no `import.meta.env`, and no per-app env-var-name differences (Konekt uses
 // VITE_SUPABASE_ANON_KEY, others VITE_SUPABASE_KEY — the app resolves that and
 // hands us the value).
-let cfg = { app: '', idpUrl: '', supabaseUrl: '', supabaseKey: '' };
+let cfg = { app: '', provider: '', idpUrl: '', supabaseUrl: '', supabaseKey: '' };
 
 // Live bindings — consumers `import { supabase, isBM, … }` and see these update
 // after configureBm() runs (ESM live bindings). configureBm() is called in the
@@ -23,6 +23,10 @@ const norm = u => { const s = String(u || '').trim(); return s.startsWith('<') ?
 export function configureBm(c = {}) {
   cfg = {
     app:         c.app || cfg.app,
+    // Supabase custom-OIDC provider name. Most apps use `custom:<app>`, but some
+    // (Konekt, Bisnis Stoa) share one `custom:bm` provider — pass `provider` to
+    // override. Client ID on that provider must still equal the token `aud` (=app).
+    provider:    c.provider || 'custom:' + (c.app || cfg.app || ''),
     idpUrl:      norm(c.idpUrl),
     supabaseUrl: String(c.supabaseUrl || '').trim(),
     supabaseKey: String(c.supabaseKey || '').trim(),
@@ -66,7 +70,7 @@ export function bmConfig() { return cfg; }
 // (issuer = the BM IdP). No-op if Supabase isn't configured.
 export async function bmSignIn(bmToken) {
   if (!supabase || !bmToken) return { error: null };
-  const { error } = await supabase.auth.signInWithIdToken({ provider: `custom:${cfg.app}`, token: bmToken });
+  const { error } = await supabase.auth.signInWithIdToken({ provider: cfg.provider, token: bmToken });
   if (error) console.error('[bm/client] signInWithIdToken failed:', error.message);
   return { error };
 }
