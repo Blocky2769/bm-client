@@ -31,14 +31,31 @@ export function configureBm(c = {}) {
   isVoucherEnabled = !!cfg.idpUrl;           // vouchers ride the IdP proxy
   isWallet = !!cfg.idpUrl;                   // Konekt Wallet rides the IdP
   isSms = !!cfg.idpUrl;                       // shared /sms/send rides the IdP
-  const ok = cfg.supabaseUrl && cfg.supabaseKey && !cfg.supabaseUrl.includes('your-project');
-  supabase = ok
-    ? createClient(cfg.supabaseUrl, cfg.supabaseKey, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
-      })
-    : null;
+  supabase = makeSupabaseClient(cfg.supabaseUrl, cfg.supabaseKey);
   isSupabase = !!supabase;
   return cfg;
+}
+
+// Build the client defensively — an unset OR malformed URL degrades to "no
+// Supabase" (mock/offline) instead of white-screening the SPA, since
+// createClient() throws synchronously on a bad URL. (Ported from Rentim.)
+function makeSupabaseClient(url, key) {
+  if (!url || !key || url.includes('your-project')) return null;
+  let validHttp = false;
+  try { const u = new URL(url); validHttp = u.protocol === 'http:' || u.protocol === 'https:'; }
+  catch { validHttp = false; }
+  if (!validHttp) {
+    console.error(`[bm/client] VITE_SUPABASE_URL is not a valid http(s) URL — running without Supabase. Got: ${JSON.stringify(url)}`);
+    return null;
+  }
+  try {
+    return createClient(url, key, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+    });
+  } catch (e) {
+    console.error('[bm/client] Supabase client init failed — running without Supabase:', e.message);
+    return null;
+  }
 }
 
 export function bmConfig() { return cfg; }
