@@ -17,6 +17,7 @@ export {
 } from './config.js';
 
 export * from './auth.js';      // OTP, email, TOTP, WebAuthn, QR, getToken, onAuthChange, currentClaims, lastKnownClaims, setBmName, decodeJwt, logout
+export * from './oidc.js';      // mode:'redirect' — signInWithBM, currentSession, currentBmUid, bmUserFromSession, onSessionChange
 export * from './voucher.js';   // myVouchers, transferVoucher, cashoutVoucher, BUNDLE_LABELS, fmtRemaining, fmtBytes
 export * from './wallet.js';    // balance, payeeBalance, pay, redeemVoucher
 export * from './sms.js';       // send, sendSms
