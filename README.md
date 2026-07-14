@@ -14,11 +14,22 @@ One codebase serves every app — there is **no hardcoded app id and no
 import { configureBm } from '@bm/client';
 configureBm({
   app:         'wanbung',                        // → token aud + custom:wanbung provider
+  // provider: 'custom:bm',                      // override when apps share one OIDC provider (Konekt, Bisnis, Bihain)
+  // mode:     'accessToken',                     // Supabase auth model (see below); default 'bridge'
   idpUrl:      import.meta.env.VITE_IDP_URL || import.meta.env.VITE_BM_IDP_URL,
   supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
   supabaseKey: import.meta.env.VITE_SUPABASE_KEY, // or VITE_SUPABASE_ANON_KEY — the app resolves it
 });
 ```
+
+### Supabase auth `mode`
+- **`'bridge'`** (default) — exchanges the BM JWT for a real Supabase session via
+  `signInWithIdToken`; RLS reads `user_metadata.phone`. Needs the app's `custom:<app>`
+  OIDC provider configured on the Supabase project. Used by WanBung/Rentim/SkulFi/
+  Konekt/Bisnis/Bihain.
+- **`'accessToken'`** — hands the BM JWT to Supabase as a third-party access token on
+  every request (no session); RLS reads `auth.jwt()->>'sub'`. `bmSignIn`/`bmSignOut`
+  become no-ops. Used by WanPMV/Niubalus.
 
 ```js
 // anywhere:
