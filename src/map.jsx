@@ -1,5 +1,8 @@
 // @bm/client/map — shared real map for the BM apps (Leaflet + OSM/CARTO tiles;
 // free, no API key; the tile layer is Google/Mapbox-swappable app-side later).
+// CONSUMER NOTE: add `optimizeDeps: { include: ['leaflet'] }` to the app's
+// vite.config — leaflet is CJS and imported from inside this package, so Vite's
+// dev scanner misses it (raw UMD = white screen in dev; builds are unaffected).
 // SUBPATH export on purpose: only map-using apps import '@bm/client/map', so
 // apps without maps never pull leaflet into their bundle. Peer dep: leaflet.
 //
