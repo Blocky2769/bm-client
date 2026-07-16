@@ -16,6 +16,7 @@ configureBm({
   app:         'wanbung',                        // → token aud + custom:wanbung provider
   // provider: 'custom:bm',                      // override when apps share one OIDC provider (Konekt, Bisnis, Bihain)
   // mode:     'accessToken',                     // Supabase auth model (see below); default 'bridge'
+  // idleTimeoutMs: 3600000,                      // idle→re-login (see below); default 1h, 0 disables
   idpUrl:      import.meta.env.VITE_IDP_URL || import.meta.env.VITE_BM_IDP_URL,
   supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
   supabaseKey: import.meta.env.VITE_SUPABASE_KEY, // or VITE_SUPABASE_ANON_KEY — the app resolves it
@@ -26,10 +27,27 @@ configureBm({
 - **`'bridge'`** (default) — exchanges the BM JWT for a real Supabase session via
   `signInWithIdToken`; RLS reads `user_metadata.phone`. Needs the app's `custom:<app>`
   OIDC provider configured on the Supabase project. Used by WanBung/Rentim/SkulFi/
-  Konekt/Bisnis/Bihain.
+  Konekt/Bisnis/Bihain. ⚠️ Managed Supabase does not support `signInWithIdToken` for
+  custom providers — new integrations should use `'redirect'`.
 - **`'accessToken'`** — hands the BM JWT to Supabase as a third-party access token on
   every request (no session); RLS reads `auth.jwt()->>'sub'`. `bmSignIn`/`bmSignOut`
   become no-ops. Used by WanPMV/Niubalus.
+- **`'redirect'`** — Supabase's native Custom-OIDC flow: `signInWithBM()` (see `oidc.js`)
+  redirects to the BM IdP hosted login page and Supabase mints its own session; RLS reads
+  `user_metadata->>'sub'`. Used by Haus Stap.
+
+### Idle-session timeout (`idleTimeoutMs`, default 1 hour)
+Phone theft is common in PNG — a BM app left logged in on a stolen handset is an open
+door across the ecosystem. After `idleTimeoutMs` with **no user activity** the session is
+force logged out (BM token cleared + Supabase signed out) and the app drops to its login
+screen. Any interaction resets the clock, so an operator working a full shift is never
+interrupted — which matters because each forced re-login costs a Twilio OTP SMS.
+
+Deliberately **idle**, not absolute: a stolen phone is idle by the time a thief opens it.
+It works in all three modes, is enforced on cold start (a session that idled out while the
+app was closed does not come back), and the activity stamp is shared across tabs via
+`localStorage` (`${app}_bm_activity`). No per-app wiring — `configureBm()` starts it.
+Pass `idleTimeoutMs: 0` to disable.
 
 ```js
 // anywhere:

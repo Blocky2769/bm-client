@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 // no `import.meta.env`, and no per-app env-var-name differences (Konekt uses
 // VITE_SUPABASE_ANON_KEY, others VITE_SUPABASE_KEY — the app resolves that and
 // hands us the value).
-let cfg = { app: '', provider: '', mode: 'bridge', version: '', idpUrl: '', supabaseUrl: '', supabaseKey: '' };
+let cfg = { app: '', provider: '', mode: 'bridge', version: '', idleTimeoutMs: 3600000, idpUrl: '', supabaseUrl: '', supabaseKey: '' };
 
 // Live bindings — consumers `import { supabase, isBM, … }` and see these update
 // after configureBm() runs (ESM live bindings). configureBm() is called in the
@@ -41,6 +41,11 @@ export function configureBm(c = {}) {
     // integrations should use 'redirect'.
     mode:        c.mode || cfg.mode || 'bridge',
     version:     c.version || cfg.version || '',   // build version for the footer tag
+    // Idle-session timeout (ms) — see idle.js. Phone theft is common in PNG, so a
+    // BM app left logged in on a stolen handset must not stay open. After this
+    // long with NO user activity the session is force logged out; any interaction
+    // resets it. Pass 0 to disable. Default 1 hour.
+    idleTimeoutMs: c.idleTimeoutMs ?? cfg.idleTimeoutMs ?? 3600000,
     idpUrl:      norm(c.idpUrl),
     supabaseUrl: String(c.supabaseUrl || '').trim(),
     supabaseKey: String(c.supabaseKey || '').trim(),
@@ -51,6 +56,12 @@ export function configureBm(c = {}) {
   isSms = !!cfg.idpUrl;                       // shared /sms/send rides the IdP
   supabase = makeSupabaseClient(cfg.supabaseUrl, cfg.supabaseKey, cfg.mode);
   isSupabase = !!supabase;
+  // Start the idle-session watcher — no per-app wiring, every app that calls
+  // configureBm() gets it. Dynamic import so config.js keeps no static dep on
+  // idle.js → auth.js (which statically imports config.js).
+  if (typeof window !== 'undefined' && cfg.idleTimeoutMs) {
+    import('./idle.js').then(m => m.startIdleWatch()).catch(() => { /* non-fatal */ });
+  }
   return cfg;
 }
 

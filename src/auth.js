@@ -3,6 +3,7 @@
 // bmSignIn(). App id + IdP URL come from configureBm() (see config.js), so this
 // single module serves every BM app.
 import { bmConfig, bmSignIn, bmSignOut } from './config';
+import { markActivity, clearActivity, idleExpired } from './idle';
 import { startRegistration, startAuthentication } from '@simplewebauthn/browser';
 
 let access = null;
@@ -21,6 +22,9 @@ function ensureRestored() {
   restored = true;
   try { const r = localStorage.getItem(lsKey()); if (r) { const o = JSON.parse(r); access = o.access; refresh = o.refresh; } }
   catch { /* ignore */ }
+  // A session that idled out while the app was closed must not come back to life
+  // on the next open (the stolen-handset case — see idle.js).
+  if (access && idleExpired()) { access = null; refresh = null; persist(); clearActivity(); }
 }
 function persist() {
   try { access ? localStorage.setItem(lsKey(), JSON.stringify({ access, refresh })) : localStorage.removeItem(lsKey()); }
@@ -77,6 +81,7 @@ export async function verifyOtp(phone, code) {
   const res = await call('/auth/verify-otp', { phone, code, app: bmConfig().app });
   access = res.access_token; refresh = res.refresh_token;
   await bmSignIn(access);  // bridge into a Supabase session before listeners query data
+  markActivity();          // start the idle clock for this session
   persist(); notify();
   return { ok: true, claims: decodeJwt(access), user_id: res.user_id };
 }
@@ -94,6 +99,9 @@ async function doRefresh() {
 export async function getToken() {
   ensureRestored();
   if (!access) return null;
+  // Defence in depth: never hand out a token for an idled-out session. In
+  // accessToken mode this runs on every Supabase request.
+  if (idleExpired()) { logout(); return null; }
   const c = decodeJwt(access);
   if (c && c.exp && c.exp - Math.floor(Date.now() / 1000) < 60) return doRefresh();
   return access;
@@ -103,13 +111,13 @@ export async function getToken() {
 export async function registerEmail(email, password, name) {
   const res = await call('/auth/register-email', { email, password, name, app: bmConfig().app });
   access = res.access_token; refresh = res.refresh_token;
-  await bmSignIn(access); persist(); notify();
+  await bmSignIn(access); markActivity(); persist(); notify();
   return { ok: true, claims: decodeJwt(access), user_id: res.user_id };
 }
 export async function loginEmail(email, password) {
   const res = await call('/auth/login-email', { email, password, app: bmConfig().app });
   access = res.access_token; refresh = res.refresh_token;
-  await bmSignIn(access); persist(); notify();
+  await bmSignIn(access); markActivity(); persist(); notify();
   return { ok: true, claims: decodeJwt(access), user_id: res.user_id };
 }
 
@@ -121,7 +129,7 @@ export async function enrolTotp(currentCode) {
 export async function verifyTotp(code) {
   try {
     const res = await call('/mfa/totp/verify', { code }, { authorization: 'Bearer ' + access });
-    access = res.access_token; refresh = res.refresh_token; persist(); notify();
+    access = res.access_token; refresh = res.refresh_token; markActivity(); persist(); notify();
     return { ok: true };
   } catch (e) {
     if (e.status === 404) return { ok: false, missing: true };
@@ -138,7 +146,7 @@ export async function webauthnRegister(email) {
   const response = await startRegistration({ optionsJSON: options });
   const res = await call('/auth/webauthn/register-verify', { email, app: bmConfig().app, response }, auth);
   access = res.access_token; refresh = res.refresh_token;
-  await bmSignIn(access); persist(); notify();
+  await bmSignIn(access); markActivity(); persist(); notify();
   return { ok: true, claims: decodeJwt(access), user_id: res.user_id };
 }
 export async function webauthnLogin(email) {
@@ -146,7 +154,7 @@ export async function webauthnLogin(email) {
   const response = await startAuthentication({ optionsJSON: options });
   const res = await call('/auth/webauthn/login-verify', { email, app: bmConfig().app, response });
   access = res.access_token; refresh = res.refresh_token;
-  await bmSignIn(access); persist(); notify();
+  await bmSignIn(access); markActivity(); persist(); notify();
   return { ok: true, claims: decodeJwt(access), user_id: res.user_id };
 }
 
@@ -165,7 +173,7 @@ export async function pollQrPairing(pairingId, { intervalMs = 2000, timeoutMs = 
     const data = await r.json().catch(() => ({}));
     if (data.status === 'approved') {
       access = data.access_token; refresh = data.refresh_token;
-      await bmSignIn(access); persist(); notify();
+      await bmSignIn(access); markActivity(); persist(); notify();
       return true;
     }
     await new Promise(res => setTimeout(res, intervalMs));
@@ -177,4 +185,4 @@ export async function approveQrPairing(pairingId) {
   return call('/auth/qr/approve', { pairing_id: pairingId }, { authorization: 'Bearer ' + access });
 }
 
-export function logout() { access = null; refresh = null; bmSignOut(); persist(); notify(); }
+export function logout() { access = null; refresh = null; bmSignOut(); clearActivity(); persist(); notify(); }
