@@ -21,10 +21,14 @@ export const COUNTRIES = [
 const BY_DIAL_LEN = [...COUNTRIES].sort((a, b) => b.dial.length - a.dial.length);
 
 // Split an E.164 string into { dial, national }. Defaults to PNG when unknown.
+// The national part has its trunk "0" stripped, so a value stored in the old
+// broken form (+610439978005) still reads back as the real number.
 export function splitE164(value) {
   const d = (value || '').replace(/\D/g, '');
   const c = BY_DIAL_LEN.find(x => d.startsWith(x.dial));
-  return c ? { dial: c.dial, national: d.slice(c.dial.length) } : { dial: '675', national: d };
+  return c
+    ? { dial: c.dial, national: d.slice(c.dial.length).replace(/^0+/, '') }
+    : { dial: '675', national: d.replace(/^0+/, '') };
 }
 
 // Loose validity: national part long enough for the selected country.
@@ -43,7 +47,11 @@ export default function PhoneInput({ value, onChange, onEnter, label, dark = fal
 
   const emit = (nextDial, nextNational) => {
     setDial(nextDial);
-    const n = (nextNational || '').replace(/\D/g, '');
+    // 🚨 Strip the national trunk "0" before building E.164. An Australian types
+    // their mobile as "0439 978 005"; plain concatenation made that
+    // +610439978005, which is not a real number but was long enough to pass
+    // isValidPhone(). See src/phone.js for the full story.
+    const n = (nextNational || '').replace(/\D/g, '').replace(/^0+/, '');
     onChange(n ? `+${nextDial}${n}` : '');
   };
 
