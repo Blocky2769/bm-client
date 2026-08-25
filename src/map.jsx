@@ -69,11 +69,13 @@ export function BmMap({
   const map = useRef(null);
   const layer = useRef(null);
   const didFit = useRef(false);
+  const pendingFit = useRef(null);   // a fit that had to wait for a real size
 
   useEffect(() => {
     injectCss();
     if (!el.current || map.current) return;
-    const m = L.map(el.current, { zoomControl: false, attributionControl: true });
+    const node = el.current;
+    const m = L.map(node, { zoomControl: false, attributionControl: true });
     map.current = m;
     if (center) m.setView([center.lat ?? center[0], center.lng ?? center[1]], zoom ?? 13);
     else m.setView(PNG_VIEW.center, zoom ?? PNG_VIEW.zoom);
@@ -81,8 +83,30 @@ export function BmMap({
     L.tileLayer(url, opts).addTo(m);
     if (zoomControl) L.control.zoom({ position: 'bottomright' }).addTo(m);
     layer.current = L.layerGroup().addTo(m);
-    setTimeout(() => m.invalidateSize(), 60);   // containers often size late
-    return () => { m.remove(); map.current = null; layer.current = null; didFit.current = false; };
+
+    // Containers size late — inside a tab, an accordion, or a card that renders
+    // before its data arrives. The old code guessed with setTimeout(…, 60) and
+    // never cancelled it, so a map removed inside that window had
+    // invalidateSize() called on it after destruction: "cannot read
+    // _leaflet_pos of undefined", and a dead map. React 18 mounts, unmounts and
+    // remounts every effect in development, so this fired constantly there and
+    // for any user who left a map screen within 60ms. Observe the element
+    // instead of guessing, and run any fit that had to wait for a size.
+    const ro = new ResizeObserver(() => {
+      if (map.current !== m) return;                        // already disposed
+      if (!node.clientWidth || !node.clientHeight) return;   // still 0x0
+      m.invalidateSize();
+      const f = pendingFit.current;
+      if (f) { pendingFit.current = null; f(); }
+    });
+    ro.observe(node);
+
+    return () => {
+      ro.disconnect();
+      pendingFit.current = null;
+      m.remove();
+      map.current = null; layer.current = null; didFit.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dark]);
 
@@ -97,11 +121,20 @@ export function BmMap({
       if (p.tooltip) mk.bindTooltip(p.tooltip, { direction: 'top', offset: [0, -10] });
       mk.addTo(g);
     }
-    if (fit === 'points' && pts.length && (refit || !didFit.current)) {
+    if (!(fit === 'points' && pts.length && (refit || !didFit.current))) return;
+
+    const run = () => {
+      if (map.current !== m) return;   // unmounted while the fit was waiting
       didFit.current = true;
       if (pts.length > 1) m.fitBounds(L.latLngBounds(pts.map(p => [p.lat, p.lng])), { padding: [34, 34], maxZoom: 13 });
       else m.setView([pts[0].lat, pts[0].lng], 13);
-    }
+    };
+    // Fitting a map whose container has no size is the other route to
+    // _leaflet_pos, and it happens whenever points arrive after mount — which
+    // is every screen that loads its markers from the network. Hand it to the
+    // observer above rather than throwing.
+    if (el.current?.clientWidth && el.current?.clientHeight) run();
+    else pendingFit.current = run;
   }, [points, activeId, onPoint, fit, refit]);
 
   const inner = <div ref={el} className={fill ? 'absolute inset-0 z-0' : 'absolute inset-0'} />;
@@ -140,15 +173,24 @@ export function LocationPicker({ value, onChange, height = 220, className = '' }
   useEffect(() => {
     injectCss();
     if (!el.current || map.current) return;
-    const m = L.map(el.current, { zoomControl: true, attributionControl: true });
+    const node = el.current;
+    const m = L.map(node, { zoomControl: true, attributionControl: true });
     map.current = m;
     const [url, opts] = TILES.light;
     L.tileLayer(url, opts).addTo(m);
     if (value?.lat != null) { m.setView([value.lat, value.lng], 15); place(m, value.lat, value.lng, false); }
     else m.setView(PNG_VIEW.center, PNG_VIEW.zoom);
     m.on('click', e => place(m, e.latlng.lat, e.latlng.lng, false));
-    setTimeout(() => m.invalidateSize(), 60);
-    return () => { m.remove(); map.current = null; marker.current = null; };
+
+    // Same fix as BmMap: an uncancelled timer firing after m.remove() throws.
+    const ro = new ResizeObserver(() => {
+      if (map.current !== m) return;
+      if (!node.clientWidth || !node.clientHeight) return;
+      m.invalidateSize();
+    });
+    ro.observe(node);
+
+    return () => { ro.disconnect(); m.remove(); map.current = null; marker.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -156,7 +198,9 @@ export function LocationPicker({ value, onChange, height = 220, className = '' }
     if (!('geolocation' in navigator) || !map.current) return;
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      pos => { setLocating(false); place(map.current, pos.coords.latitude, pos.coords.longitude, true); },
+      // Up to 8s can pass before this fires and the user may be two screens
+      // away by then. Placing a marker on a removed map throws.
+      pos => { if (!map.current) return; setLocating(false); place(map.current, pos.coords.latitude, pos.coords.longitude, true); },
       () => setLocating(false),
       { enableHighAccuracy: true, timeout: 8000 },
     );
