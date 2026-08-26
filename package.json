@@ -1,27 +1,33 @@
 {
   "name": "@bm/client",
-  "version": "1.6.0",
-  "description": "Shared Blockchain Melanesia client \u2014 BM IdP auth (phone/email/passkey/QR), Supabase custom-OIDC (bridge/accessToken/redirect modes), idle-session timeout, Konekt voucher, and the E.164 PhoneInput. Configured once per app via configureBm().",
+  "version": "1.7.0",
+  "description": "Shared Blockchain Melanesia client \u2014 BM IdP auth (phone/email/passkey/QR), Supabase custom-OIDC (bridge/accessToken/redirect modes), idle-session timeout, Konekt voucher, the E.164 PhoneInput, Bluetooth ESC/POS printing (@bm/client/print) and the BM PDF look (@bm/client/pdf). Configured once per app via configureBm().",
   "type": "module",
   "main": "src/index.js",
   "module": "src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./map": "./src/map.jsx"
+    "./map": "./src/map.jsx",
+    "./print": "./src/print.js",
+    "./pdf": "./src/pdf.js"
   },
   "files": [
     "src"
   ],
   "peerDependencies": {
-    "react": ">=18",
-    "@supabase/supabase-js": ">=2",
     "@simplewebauthn/browser": ">=10",
-    "leaflet": ">=1.9"
+    "@supabase/supabase-js": ">=2",
+    "jspdf": ">=3",
+    "leaflet": ">=1.9",
+    "react": ">=18"
   },
   "license": "UNLICENSED",
   "private": true,
   "peerDependenciesMeta": {
     "leaflet": {
+      "optional": true
+    },
+    "jspdf": {
       "optional": true
     }
   }
