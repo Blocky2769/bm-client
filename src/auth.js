@@ -134,7 +134,14 @@ export async function verifyTotp(code) {
   } catch (e) {
     if (e.status === 404) return { ok: false, missing: true };
     if (e.status === 409) return { ok: false, notEnrolled: true };
-    throw e;
+    // 401 bad_totp_code — the everyday case (mistyped, or the 30s window
+    // rolled while typing). This used to RETHROW, and every app's Rentim-
+    // lineage submitTotp has no try/catch around it, so one wrong code froze
+    // the login button on "Checking…" forever (found live by Chris in Dinau
+    // Buk, 30 Sep 2026). verifyTotp now NEVER throws: callers branch on the
+    // returned shape and their existing else-path shows "wrong code".
+    if (e.status === 401) return { ok: false, badCode: true };
+    return { ok: false, error: e.message || 'network error' };
   }
 }
 
