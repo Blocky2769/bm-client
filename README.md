@@ -51,10 +51,19 @@ Pass `idleTimeoutMs: 0` to disable.
 
 ```js
 // anywhere:
-import { requestOtp, verifyOtp, getToken, logout, onAuthChange, currentClaims,
-         supabase, isBM, PhoneInput, isValidPhone, toE164,
+import { requestOtp, verifyOtp, requestOtpSms, getToken, logout, onAuthChange,
+         currentClaims, supabase, isBM, PhoneInput, isValidPhone, toE164,
          myVouchers, transferVoucher } from '@bm/client';
 ```
+
+### Login codes by WhatsApp (v1.9.0)
+`requestOtp()` now tells the IdP which app is asking, so the IdP can send the code by
+WhatsApp for apps that are switched on (`WHATSAPP_APPS` on the IdP) and record the
+delivery per app. Nothing to configure per app — the id comes from `configureBm()`.
+The reply carries `channel` (`'whatsapp'` or `'sms'`). When it is `'whatsapp'`, show a
+"No WhatsApp? Send it by SMS instead" link that calls `requestOtpSms(phone)`: that
+re-sends the SAME code once, after a short wait, so it can never cost more than one
+extra message. It resolves `false` when there is nothing to re-send — hide the link.
 
 `supabase`, `isBM`, `isSupabase`, `isVoucherEnabled` are **live bindings** — read
 them after `configureBm()` has run (it runs in `main.jsx` before render, so they're

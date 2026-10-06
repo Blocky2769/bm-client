@@ -74,7 +74,24 @@ async function call(path, body, headers = {}) {
 
 // phone is already E.164 (the caller normalises it — see toE164/PhoneInput).
 export async function requestOtp(phone) {
-  return call('/auth/request-otp', { phone }); // { ok, expires_in, dev_otp? }
+  // `app` tells the IdP which app is asking, so it can pick the channel
+  // (WhatsApp where that app is switched on) and label the delivery record.
+  // It only picks the channel: the code still goes to the phone that owns it,
+  // and the token's `aud` is set at verify-otp as before.
+  // → { ok, expires_in, channel?: 'whatsapp'|'sms', dev_otp? }
+  return call('/auth/request-otp', { phone, app: bmConfig().app });
+}
+
+// "Send it by SMS instead" — the user's own way out when a WhatsApp code never
+// arrives (no data, basic handset). Sends the SAME code, so it can never cost
+// more than one extra message, and the IdP allows it once per code after a
+// short wait. Returns false when there is nothing to re-send or WhatsApp is not
+// in use, so a login screen can simply hide the button.
+export async function requestOtpSms(phone) {
+  try {
+    await call('/auth/request-otp-sms', { phone });
+    return true;
+  } catch { return false; }
 }
 
 export async function verifyOtp(phone, code) {
