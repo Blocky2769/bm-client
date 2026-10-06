@@ -1,7 +1,7 @@
 {
   "name": "@bm/client",
-  "version": "1.9.0",
-  "description": "Shared Blockchain Melanesia client — BM IdP auth (phone/email/passkey/QR), Supabase custom-OIDC (bridge/accessToken/redirect modes), idle-session timeout, Konekt voucher, the E.164 PhoneInput, Bluetooth ESC/POS printing (@bm/client/print) and the BM PDF look (@bm/client/pdf). The shared BM rewards rail (@bm/client/rewards, server-side). Configured once per app via configureBm().",
+  "version": "1.10.0",
+  "description": "Shared Blockchain Melanesia client — BM IdP auth (phone/email/passkey/QR), Supabase custom-OIDC (bridge/accessToken/redirect modes), idle-session timeout, Konekt voucher, the E.164 PhoneInput, Bluetooth ESC/POS printing (@bm/client/print) and the BM PDF look (@bm/client/pdf). The shared BM rewards rail (@bm/client/rewards, server-side) and the standard in-app messages inbox (@bm/client/notices). Configured once per app via configureBm().",
   "type": "module",
   "main": "src/index.js",
   "module": "src/index.js",
@@ -10,7 +10,8 @@
     "./map": "./src/map.jsx",
     "./print": "./src/print.js",
     "./pdf": "./src/pdf.js",
-    "./rewards": "./src/rewards.js"
+    "./rewards": "./src/rewards.js",
+    "./notices": "./src/Notices.jsx"
   },
   "files": [
     "src"

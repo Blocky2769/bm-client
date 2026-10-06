@@ -65,6 +65,29 @@ The reply carries `channel` (`'whatsapp'` or `'sms'`). When it is `'whatsapp'`, 
 re-sends the SAME code once, after a short wait, so it can never cost more than one
 extra message. It resolves `false` when there is nothing to re-send — hide the link.
 
+### In-app messages (v1.10.0) — `@bm/client/notices`
+
+The standard BM inbox. WhatsApp (through the IdP's `/notify`) is how a message
+*travels*; this is where it *lives*, because WhatsApp can't always arrive — no
+WhatsApp, no data, wrong number, and a Konekt customer whose voucher just ran out
+has no internet at all. So the app writes the message to its own table as well.
+
+Each app keeps its own table with the same shape — apply [`sql/bm_notices.sql`](sql/bm_notices.sql)
+to the app's Supabase and adapt only the two marked identity lines. Both languages are
+stored when the message is written, so wording never drifts and nothing re-renders.
+Only a server (service key) writes rows; a person may read their own and set `read_at`.
+
+```jsx
+import { useNotices, NoticeBell, NoticeList } from '@bm/client/notices';
+
+const { notices, unread, loading, markAllRead, text } = useNotices({ lang });
+<NoticeBell count={unread} onClick={() => navigate('/messages')} />
+<NoticeList notices={notices} lang={lang} renderIcon={k => (k === 'voucher_low' ? '📶' : '🔔')} />
+```
+
+`useNotices` updates live while the screen is open. `listNotices`, `unreadNoticeCount`,
+`markNoticesRead`, `onNotices` and `noticeText` are there for a custom screen.
+
 `supabase`, `isBM`, `isSupabase`, `isVoucherEnabled` are **live bindings** — read
 them after `configureBm()` has run (it runs in `main.jsx` before render, so they're
 correct on first use).
