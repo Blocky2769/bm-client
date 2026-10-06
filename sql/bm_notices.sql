@@ -29,12 +29,27 @@ create table if not exists bm_notices (
   data         jsonb,                               -- codes, amounts, ids for the screen
   dedupe       text unique,                         -- optional; one row per key
   read_at      timestamptz,
-  created_at   timestamptz not null default now()
+  created_at   timestamptz not null default now(),
+  -- ── The same row is the OUTBOX ──────────────────────────────────────────
+  -- The app writes the message once, here; a small drain sends it through BM
+  -- Com and stamps the result. So the in-app copy always exists even when
+  -- sending fails, and nothing is ever sent twice (BM Com also dedupes).
+  -- Leave type null for a message that should only ever live in the app.
+  type         text,                                -- BM Com message type
+  values       jsonb,                               -- values for that type
+  phone_send   boolean not null default true,       -- false = in-app only
+  sent_at      timestamptz,
+  channel      text,                                -- whatsapp | sms | email | none
+  attempts     integer not null default 0,
+  send_error   text
 );
 
 create index if not exists bm_notices_phone_idx  on bm_notices (phone, created_at desc);
 create index if not exists bm_notices_bm_sub_idx on bm_notices (bm_sub, created_at desc);
 create index if not exists bm_notices_unread_idx on bm_notices (read_at) where read_at is null;
+-- The drain's queue: unsent, still worth trying.
+create index if not exists bm_notices_outbox_idx on bm_notices (sent_at, attempts)
+  where sent_at is null and type is not null;
 
 alter table bm_notices enable row level security;
 

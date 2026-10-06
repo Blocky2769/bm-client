@@ -85,6 +85,10 @@ const { notices, unread, loading, markAllRead, text } = useNotices({ lang });
 <NoticeList notices={notices} lang={lang} renderIcon={k => (k === 'voucher_low' ? '📶' : '🔔')} />
 ```
 
+The same row is also the **outbox**: give it `type` + `values` and a drain (a small edge
+function or server tick) sends it through BM Com and stamps `sent_at`/`channel`. The app
+writes the message once; the in-app copy exists whether or not WhatsApp could carry it.
+
 `useNotices` updates live while the screen is open. `listNotices`, `unreadNoticeCount`,
 `markNoticesRead`, `onNotices` and `noticeText` are there for a custom screen.
 
