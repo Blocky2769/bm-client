@@ -173,14 +173,22 @@ export async function webauthnRegister(email) {
   await bmSignIn(access); markActivity(); persist(); notify();
   return { ok: true, claims: decodeJwt(access), user_id: res.user_id };
 }
+// Sign in with a passkey. `email` is OPTIONAL: without it the browser offers any BM passkey saved on this device (discoverable
+// credential) and the credential itself says whose account it is. The IdP's challenge_id ties the options to the verify call.
+// Only works on a page whose address ends in the passkey domain (blockchainmelanesia.com) — see `passkeysAvailable()`.
 export async function webauthnLogin(email) {
-  const { options } = await call('/auth/webauthn/login-options', { email });
+  const { options, challenge_id } = await call('/auth/webauthn/login-options', email ? { email } : {});
   const response = await startAuthentication({ optionsJSON: options });
-  const res = await call('/auth/webauthn/login-verify', { email, app: bmConfig().app, response });
+  const res = await call('/auth/webauthn/login-verify', { email: email || undefined, app: bmConfig().app, response, challenge_id });
   access = res.access_token; refresh = res.refresh_token;
   await bmSignIn(access); markActivity(); persist(); notify();
   return { ok: true, claims: decodeJwt(access), user_id: res.user_id };
 }
+// Passkeys are bound to blockchainmelanesia.com: a page on netlify.app (or another domain) cannot use them.
+export const passkeysAvailable = (host = typeof location !== 'undefined' ? location.hostname : '') =>
+  typeof window !== 'undefined' && !!window.PublicKeyCredential && (host === 'blockchainmelanesia.com' || host.endsWith('.blockchainmelanesia.com'));
+// The IdP's hosted page where a signed-in person adds a passkey to their account (needs a fresh code sign-in there).
+export const passkeyAddUrl = () => `${bmConfig().idpUrl.replace(/\/$/, '')}/passkey`;
 
 // QR device-link: an unauthenticated device starts + polls; an authenticated
 // device (on /pair) approves.

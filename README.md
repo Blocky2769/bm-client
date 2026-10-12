@@ -23,6 +23,12 @@ configureBm({
 });
 ```
 
+### Passkeys (v1.11.0)
+`webauthnLogin()` now works **without an email** — the browser offers any BM passkey on the device and the passkey says whose account it is
+(it sends the IdP's `challenge_id`; older versions needed the email typed). A passkey is bound to `blockchainmelanesia.com`, so it only works on a page at
+that domain or a subdomain: show the option only when `passkeysAvailable()` is true. People add a passkey on the IdP's hosted page — link them to
+`passkeyAddUrl()` (a fresh phone/email sign-in is needed there).
+
 ### Supabase auth `mode`
 - **`'bridge'`** (default) — exchanges the BM JWT for a real Supabase session via
   `signInWithIdToken`; RLS reads `user_metadata.phone`. Needs the app's `custom:<app>`
