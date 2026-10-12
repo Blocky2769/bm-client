@@ -186,7 +186,7 @@ export async function webauthnLogin(email) {
 }
 // Passkeys are bound to blockchainmelanesia.com: a page on netlify.app (or another domain) cannot use them.
 export const passkeysAvailable = (host = typeof location !== 'undefined' ? location.hostname : '') =>
-  typeof window !== 'undefined' && !!window.PublicKeyCredential && (host === 'blockchainmelanesia.com' || host.endsWith('.blockchainmelanesia.com'));
+  typeof window !== 'undefined' && !!window.PublicKeyCredential && (host === 'blockchainmelanesia.com' || host.endsWith('.blockchainmelanesia.com') || host === 'localhost');   // localhost: local IdP with BM_RP_ID=localhost
 // The IdP's hosted page where a signed-in person adds a passkey to their account (needs a fresh code sign-in there).
 export const passkeyAddUrl = () => `${bmConfig().idpUrl.replace(/\/$/, '')}/passkey`;
 
