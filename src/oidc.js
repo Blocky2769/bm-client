@@ -17,8 +17,13 @@ const subs = new Set();
 function wire() {
   if (_wired || !supabase) return;
   _wired = true;
-  supabase.auth.getSession().then(({ data }) => { _session = data.session; subs.forEach(f => { try { f(_session); } catch { /* ignore */ } }); });
-  supabase.auth.onAuthStateChange((_e, s) => { _session = s; subs.forEach(f => { try { f(s); } catch { /* ignore */ } }); });
+  // Subscribers run on the NEXT tick, never inside supabase-js's callback: onAuthStateChange fires while the
+  // auth lock is held (e.g. during the ?code= exchange on the return from the hosted login), and a subscriber
+  // that awaits any Supabase call there deadlocks — the app hangs on its first sign-in until it is restarted
+  // (Niubalus Academy, 13 Oct 2026). Deferring is what supabase-js documents for this.
+  const notify = s => setTimeout(() => subs.forEach(f => { try { f(s); } catch { /* ignore */ } }), 0);
+  supabase.auth.getSession().then(({ data }) => { _session = data.session; notify(_session); });
+  supabase.auth.onAuthStateChange((_e, s) => { _session = s; notify(s); });
 }
 
 // Redirect to the BM hosted login. Returns supabase-js's { data, error }.
