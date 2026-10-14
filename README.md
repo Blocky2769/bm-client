@@ -86,6 +86,12 @@ and **Paying from overseas? (SWIFT)** — BM's BSP account + BIC with the CRN as
 BM Pay `/biller/account`. Never call BM Pay `/biller/*` from the browser (BM Pay allows no app origins).
 Own UI instead? `useBankTopUp()` + `<SwiftDetails swift crn lang />`. Inline styles, so it works with or without Tailwind.
 
+**Redirect-mode apps (v1.13.0, needs BM IdP 1.9.0+):** apps that sign in through Supabase's custom OIDC (Haus Stap,
+Wan PMV, Singsing, Yumitu, Niubalus Academy) now hold a BM token too: the IdP returns a refresh token from
+`/oauth/token`, Supabase passes `provider_token` + `provider_refresh_token` to the app once after sign-in, and
+`oidc.js` adopts them (`getToken()` then refreshes at the IdP like every other mode). Sessions from before this
+change have no BM token: the card says "sign out and sign in again" until the user does.
+
 ### In-app messages (v1.10.0) — `@bm/client/notices`
 
 The standard BM inbox. WhatsApp (through the IdP's `/notify`) is how a message

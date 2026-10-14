@@ -12,6 +12,8 @@
 import { useEffect, useState } from 'react';
 import { bankTopUp, bankTopUpDeposits } from './wallet.js';
 import { getToken } from './auth.js';
+import { bmConfig } from './config.js';
+import { syncBmFromSession } from './oidc.js';
 
 const T = {
   en: {
@@ -28,6 +30,7 @@ const T = {
     sBank: 'Bank', sName: 'Account name', sAcct: 'Account number', sBranch: 'Branch', sAddr: 'Bank address', sRef: 'Payment reference',
     swiftLands: 'It arrives in Kina in your BM Wallet, usually in 2–5 business days. Your bank sets the exchange rate, and the banks may deduct transfer fees.',
     recent: 'Recent bank top-ups', credited: 'credited', pending: 'processing', loading: 'Loading…',
+    relogin: 'Sign out and sign in again to see your bank top-up details.',
   },
   tpi: {
     title: 'Putim mani long benk bilong yu', sub: 'Wanem PNG benk app, o long narapela kantri',
@@ -43,6 +46,7 @@ const T = {
     sBank: 'Bank', sName: 'Nem bilong akaun', sAcct: 'Namba bilong akaun', sBranch: 'Branch', sAddr: 'Adres bilong bank', sRef: 'Payment reference',
     swiftLands: 'Em bai kamap olsem Kina long BM Wallet bilong yu, planti taim insait long 2–5 de wok. Bank bilong yu i makim exchange rate, na ol bank i ken kisim fee.',
     recent: 'Ol nupela benk top-ap', credited: 'i go pinis', pending: 'i wok yet', loading: 'Wetim…',
+    relogin: 'Sain aut na sain in gen bilong lukim ol detail bilong putim mani long benk.',
   },
 };
 const langOf = l => (l === 'tpi' || l === 'tp' || l === 'tok') ? 'tpi' : 'en';
@@ -54,12 +58,17 @@ const DEMO = {
 
 /** Data for a custom top-up screen: { acct, deposits, error, loading }. */
 export function useBankTopUp({ demo = false, deposits: withDeposits = true } = {}) {
-  const [st, setSt] = useState({ acct: null, deposits: [], error: '', loading: true, signedIn: true });
+  const [st, setSt] = useState({ acct: null, deposits: [], error: '', loading: true, signedIn: true, relogin: false });
   useEffect(() => {
     let alive = true;
     (async () => {
       if (demo) return setSt({ acct: DEMO, deposits: [], error: '', loading: false, signedIn: true });
-      if (!(await getToken().catch(() => null))) return alive && setSt(s => ({ ...s, loading: false, signedIn: false }));
+      // Redirect mode (Supabase custom OIDC): pick up the BM tokens Supabase carried in at sign-in first.
+      const session = bmConfig().mode === 'redirect' ? await syncBmFromSession() : null;
+      if (!(await getToken().catch(() => null))) {
+        // Signed in to the app but no BM token: a session from before IdP 1.9.0 — one fresh sign-in fixes it.
+        return alive && setSt(s => ({ ...s, loading: false, signedIn: !!session, relogin: !!session }));
+      }
       try {
         const [acct, deps] = await Promise.all([bankTopUp(), withDeposits ? bankTopUpDeposits().catch(() => []) : []]);
         if (alive) setSt({ acct, deposits: deps, error: '', loading: false, signedIn: true });
@@ -120,7 +129,7 @@ const fmtDate = iso => (iso ? new Date(iso).toLocaleDateString('en-PG', { day: '
 export function BankTopUp({ lang = 'en', defaultOpen = false, showDeposits = true, demo = false, style }) {
   const t = T[langOf(lang)];
   const [open, setOpen] = useState(defaultOpen);
-  const { acct, deposits, error, loading, signedIn } = useBankTopUp({ demo, deposits: showDeposits });
+  const { acct, deposits, error, loading, signedIn, relogin } = useBankTopUp({ demo, deposits: showDeposits });
   if (!signedIn) return null;
   const pct = acct ? Math.round((acct.fee_pct || 0) * 10000) / 100 : 0;
   return (
@@ -136,6 +145,7 @@ export function BankTopUp({ lang = 'en', defaultOpen = false, showDeposits = tru
         <div style={{ marginTop: 12 }}>
           <p style={{ ...S.small, margin: '0 0 4px' }}>{t.intro}</p>
           {loading && <p style={S.muted}>{t.loading}</p>}
+          {relogin && <p style={{ ...S.small, color: '#92400e' }}>ℹ️ {t.relogin}</p>}
           {error && <p style={{ ...S.small, color: '#b91c1c' }}>⚠️ {error}</p>}
           {acct && (
             <>

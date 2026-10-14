@@ -217,4 +217,20 @@ export async function approveQrPairing(pairingId) {
   return call('/auth/qr/approve', { pairing_id: pairingId }, { authorization: 'Bearer ' + access });
 }
 
+// Redirect mode (Supabase custom OIDC — oidc.js): the BM IdP gives Supabase an access + refresh token at
+// sign-in (IdP 1.9.0+), and Supabase hands them to the app once (session.provider_token /
+// provider_refresh_token). Adopting them here makes getToken() work in redirect-mode apps too, so BM APIs
+// (bank + SWIFT top-up card, wallet) see the user as signed in. dropBmTokens() on Supabase sign-out.
+export function adoptBmTokens(acc, ref) {
+  ensureRestored();
+  if (!acc || acc === access) return;
+  access = acc; if (ref) refresh = ref;
+  markActivity(); persist(); notify();
+}
+export function dropBmTokens() {
+  ensureRestored();
+  if (!access && !refresh) return;
+  access = null; refresh = null; persist(); notify();
+}
+
 export function logout() { access = null; refresh = null; bmSignOut(); clearActivity(); persist(); notify(); }
