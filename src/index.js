@@ -19,8 +19,9 @@ export {
 export * from './auth.js';      // OTP, email, TOTP, WebAuthn, QR, getToken, onAuthChange, currentClaims, lastKnownClaims, setBmName, decodeJwt, logout
 export * from './oidc.js';      // mode:'redirect' — signInWithBM, currentSession, currentBmUid, bmUserFromSession, onSessionChange
 export * from './voucher.js';   // myVouchers, transferVoucher, cashoutVoucher, BUNDLE_LABELS, fmtRemaining, fmtBytes
-export * from './wallet.js';    // balance, payeeBalance, pay, redeemVoucher
+export * from './wallet.js';    // balance, payeeBalance, pay, redeemVoucher, bankTopUp, bankTopUpDeposits
 export * from './sms.js';       // send, sendSms
 export { toE164 } from './phone.js';
 export { default as PhoneInput, COUNTRIES, splitE164, isValidPhone } from './PhoneInput.jsx';
 export { VersionTag } from './VersionTag.jsx';
+export { BankTopUp, SwiftDetails, useBankTopUp } from './BankTopUp.jsx';   // bank + SWIFT top-up card — every app shows it

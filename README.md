@@ -71,6 +71,21 @@ The reply carries `channel` (`'whatsapp'` or `'sms'`). When it is `'whatsapp'`, 
 re-sends the SAME code once, after a short wait, so it can never cost more than one
 extra message. It resolves `false` when there is nothing to re-send — hide the link.
 
+### Bank + SWIFT top-up card (v1.12.0) — required in every app
+Martin, 15 Oct 2026: every app integrated with BM IdP + BM Pay + BM Com shows this, so overseas (diaspora)
+customers can always fund their BM Wallet. Put it wherever the app shows the user's wallet/account:
+
+```jsx
+import { BankTopUp } from '@bm/client';
+<BankTopUp lang={lang} />          // 'en' | 'tpi'; renders nothing when signed out
+```
+
+It shows BM's biller code + the user's permanent CRN ("Pay a bill" at any PNG bank), the fee, recent bank top-ups,
+and **Paying from overseas? (SWIFT)** — BM's BSP account + BIC with the CRN as the reference. Data comes from
+`bankTopUp()` / `bankTopUpDeposits()` → BM IdP `GET /wallet/topup` (1.8.0+), which forwards the user's own token to
+BM Pay `/biller/account`. Never call BM Pay `/biller/*` from the browser (BM Pay allows no app origins).
+Own UI instead? `useBankTopUp()` + `<SwiftDetails swift crn lang />`. Inline styles, so it works with or without Tailwind.
+
 ### In-app messages (v1.10.0) — `@bm/client/notices`
 
 The standard BM inbox. WhatsApp (through the IdP's `/notify`) is how a message

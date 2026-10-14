@@ -33,3 +33,11 @@ export const pay = (payee, amount, ref) =>
 // Redeem a single-use Konekt voucher into the caller's wallet.
 export const redeemVoucher = code =>
   call('/wallet/voucher/redeem', { method: 'POST', body: { code } });
+
+// Bank top-up details (BM IdP 1.8.0+, which forwards the user's own token to BM Pay):
+// { crn, billerCode|null, biller_registered, fee_pct, how, swift|null }. `swift` =
+// BM's BSP account for paying in from OVERSEAS (international transfer, CRN as the
+// reference) — null until BM Pay has it set. Every app shows this via <BankTopUp>.
+export const bankTopUp = () => call('/wallet/topup');
+// The caller's recent bank top-ups: [{ id, amount_toea, bank_ref, value_date, credited, created_at }].
+export const bankTopUpDeposits = () => call('/wallet/topup/deposits').then(d => d.deposits || []);
