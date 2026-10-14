@@ -86,6 +86,11 @@ and **Paying from overseas? (SWIFT)** — BM's BSP account + BIC with the CRN as
 BM Pay `/biller/account`. Never call BM Pay `/biller/*` from the browser (BM Pay allows no app origins).
 Own UI instead? `useBankTopUp()` + `<SwiftDetails swift crn lang />`. Inline styles, so it works with or without Tailwind.
 
+**Before BSP issues the biller code (v1.14.0):** while BM Pay has no `BSP_BILLER_CODE`, the card shows **Pay by bank
+transfer** instead of "Pay a bill": BM's BSP account name + number with the customer's CRN as the reference (BM Pay
+matches the CRN on the statement either way), plus "Pay a bill is coming". When the code is set on BM Pay it
+switches to "Pay a bill" by itself — no app release. Preview any mode with `<BankTopUp demo={{ billerCode: '123' }} />`.
+
 **Redirect-mode apps (v1.13.0, needs BM IdP 1.9.0+):** apps that sign in through Supabase's custom OIDC (Haus Stap,
 Wan PMV, Singsing, Yumitu, Niubalus Academy) now hold a BM token too: the IdP returns a refresh token from
 `/oauth/token`, Supabase passes `provider_token` + `provider_refresh_token` to the app once after sign-in, and
