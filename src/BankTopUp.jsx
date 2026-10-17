@@ -20,6 +20,8 @@ const T = {
     title: 'Top up from your bank', sub: 'Any PNG bank app, or from overseas',
     intro: 'Add Blockchain Melanesia as a biller once in your bank’s app, then top up any time. It lands in your BM Wallet — spendable in every BM app.',
     biller: 'Biller code', crn: 'Your reference (CRN)', copy: 'tap to copy', copied: 'copied ✓',
+    payNow: 'Pay now — card or BSP Pay', payNowSub: 'Instant: the credit lands in minutes. Card carries a {card}% cost; BSP Pay {bsp}.',
+    payNowBspFree: 'credits in full', payNowBspPct: 'costs {pct}%',
     how1: 'In your bank app choose “Pay a bill” / “Biller”.',
     how2: 'Enter the biller code and your reference (CRN) exactly as shown.',
     how3: 'Enter the amount and confirm. Your wallet is credited once the bank settles it (same or next business day).',
@@ -42,6 +44,8 @@ const T = {
     title: 'Putim mani long benk bilong yu', sub: 'Wanem PNG benk app, o long narapela kantri',
     intro: 'Putim Blockchain Melanesia olsem bila wanpela taim long benk app bilong yu, na putim mani wanem taim. Em i go long BM Walet bilong yu — yu inap usim long olgeta BM app.',
     biller: 'Bila kod', crn: 'Refens bilong yu (CRN)', copy: 'tapim long kopi', copied: 'kopi pinis ✓',
+    payNow: 'Peim nau — kad o BSP Pay', payNowSub: 'Kwiktaim: moni i kamap insait long sampela minit. Kad i kostim {card}%; BSP Pay {bsp}.',
+    payNowBspFree: 'olgeta moni i go insait', payNowBspPct: 'i kostim {pct}%',
     how1: 'Long benk app bilong yu makim “Pay a bill” / “Biller”.',
     how2: 'Putim bila kod na refens (CRN) bilong yu stret olsem i stap.',
     how3: 'Putim hamas mani na konfem. Walet bilong yu i kisim mani taim benk i setolim (wankain de o neks bisnis de).',
@@ -160,6 +164,18 @@ export function BankTopUp({ lang = 'en', defaultOpen = false, showDeposits = tru
           {loading && <p style={S.muted}>{t.loading}</p>}
           {relogin && <p style={{ ...S.small, color: '#92400e' }}>ℹ️ {t.relogin}</p>}
           {error && <p style={{ ...S.small, color: '#b91c1c' }}>⚠️ {error}</p>}
+          {acct && acct.topup?.url && (
+            // Instant top-up: BM Pay advertises this ONLY while its gate is
+            // open, so the button appears/disappears without an app release.
+            <a href={acct.topup.url} target="_blank" rel="noopener noreferrer"
+              style={{ display: 'block', textAlign: 'center', background: '#047857', color: '#fff', borderRadius: 12, padding: '12px 14px', fontWeight: 800, fontSize: 14, textDecoration: 'none', margin: '0 0 4px' }}>
+              ⚡ {t.payNow}
+              <span style={{ display: 'block', fontWeight: 500, fontSize: 11, opacity: 0.9, marginTop: 2 }}>
+                {t.payNowSub.replace('{card}', String(acct.topup.card_fee_pct ?? 3)).replace('{bsp}',
+                  (acct.topup.bsppay_fee_pct ?? 0) > 0 ? t.payNowBspPct.replace('{pct}', String(acct.topup.bsppay_fee_pct)) : t.payNowBspFree)}
+              </span>
+            </a>
+          )}
           {acct && (
             <>
               {acct.billerCode ? (
