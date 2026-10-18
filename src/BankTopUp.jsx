@@ -6,6 +6,7 @@
 //
 //   import { BankTopUp } from '@bm/client';
 //   <BankTopUp lang={lang} />            // lang: 'en' | 'tpi' (or 'tp')
+//   <BankTopUp lang={lang} tone="dark" />  // raised 3D emerald key, for apps with a dark home screen
 //
 // Inline styles only, so it looks right in Tailwind and plain-CSS apps alike.
 // Renders nothing when signed out. `demo` shows sample data for previews.
@@ -143,23 +144,35 @@ export function SwiftDetails({ swift, crn, lang = 'en', style }) {
 const fmtDate = iso => (iso ? new Date(iso).toLocaleDateString('en-PG', { day: 'numeric', month: 'short' }) : '');
 
 /** The standard card. Collapsed by default (defaultOpen to start open). */
-export function BankTopUp({ lang = 'en', defaultOpen = false, showDeposits = true, demo = false, style }) {
+export function BankTopUp({ lang = 'en', defaultOpen = false, showDeposits = true, demo = false, style, tone = 'light' }) {
   const t = T[langOf(lang)];
   const [open, setOpen] = useState(defaultOpen);
   const { acct, deposits, error, loading, signedIn, relogin } = useBankTopUp({ demo, deposits: showDeposits });
   if (!signedIn) return null;
   const pct = acct ? Math.round((acct.fee_pct || 0) * 10000) / 100 : 0;
+  // tone="dark": a raised 3D emerald key for apps with a dark home screen (the default light card looks pasted on there).
+  // Gradient face, darker edge, top highlight, drop shadow; the details open in a light panel so they stay readable.
+  const dark = tone === 'dark';
+  const card = dark
+    ? { ...S.card, background: 'linear-gradient(180deg,#34d399 0%,#059669 48%,#047857 100%)', border: '1px solid #064e3b', color: '#fff',
+        boxShadow: '0 6px 14px rgba(0,0,0,.45), 0 2px 3px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.4), inset 0 -3px 0 rgba(0,0,0,.2)' }
+    : S.card;
   return (
-    <div style={{ ...S.card, ...style }}>
+    <div style={{ ...card, ...style }}>
       <button type="button" onClick={() => setOpen(o => !o)} style={S.head} aria-expanded={open}>
         <span>
-          <span style={{ display: 'block', fontSize: 14, fontWeight: 800 }}>🏦 {t.title}</span>
-          <span style={{ display: 'block', fontSize: 12, color: '#047857', marginTop: 2 }}>{t.sub}</span>
+          <span style={{ display: 'block', fontSize: 14, fontWeight: 800, textShadow: dark ? '0 1px 1px rgba(0,0,0,.3)' : undefined }}>🏦 {t.title}</span>
+          <span style={{ display: 'block', fontSize: 12, color: dark ? 'rgba(255,255,255,.88)' : '#047857', marginTop: 2 }}>{t.sub}</span>
         </span>
-        <span style={{ fontSize: 20, color: '#047857' }} aria-hidden="true">{open ? '−' : '+'}</span>
+        <span style={dark
+          ? { width: 28, height: 28, borderRadius: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800, color: '#064e3b',
+              background: 'linear-gradient(180deg,#ecfdf5,#a7f3d0)', boxShadow: '0 2px 4px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.9)' }
+          : { fontSize: 20, color: '#047857' }} aria-hidden="true">{open ? '−' : '+'}</span>
       </button>
       {open && (
-        <div style={{ marginTop: 12 }}>
+        <div style={dark
+          ? { marginTop: 12, background: '#f0fdf9', color: '#064e3b', borderRadius: 12, padding: 12, boxShadow: 'inset 0 2px 5px rgba(0,0,0,.18)' }
+          : { marginTop: 12 }}>
           {(!acct || acct.billerCode) && <p style={{ ...S.small, margin: '0 0 4px' }}>{t.intro}</p>}
           {loading && <p style={S.muted}>{t.loading}</p>}
           {relogin && <p style={{ ...S.small, color: '#92400e' }}>ℹ️ {t.relogin}</p>}

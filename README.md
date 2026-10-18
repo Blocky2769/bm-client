@@ -78,6 +78,7 @@ customers can always fund their BM Wallet. Put it wherever the app shows the use
 ```jsx
 import { BankTopUp } from '@bm/client';
 <BankTopUp lang={lang} />          // 'en' | 'tpi'; renders nothing when signed out
+<BankTopUp lang={lang} tone="dark" />  // 3D emerald key for dark home screens (default 'light' is unchanged)
 ```
 
 It shows BM's biller code + the user's permanent CRN ("Pay a bill" at any PNG bank), the fee, recent bank top-ups,
