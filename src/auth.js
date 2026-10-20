@@ -103,7 +103,53 @@ export async function verifyOtp(phone, code) {
   return { ok: true, claims: decodeJwt(access), user_id: res.user_id };
 }
 
-async function doRefresh() {
+// SINGLE-FLIGHT + cross-instance-safe refresh (20 Oct 2026). The IdP rotates
+// refresh tokens (one use, no grace) and access tokens live 15 minutes, so near
+// expiry EVERY data call's getToken() wants a refresh at once — in bridge /
+// accessToken mode that is every Supabase request. Without a lock, concurrent
+// refreshes raced the SAME refresh token: the first won and rotated it, every
+// loser got 401 invalid-refresh and wiped the session — the app "randomly"
+// logged the user out mid-task (found live 20 Oct: Konekt logged Concillia out
+// right after a successful Dinau repayment). One refresh now runs at a time and
+// everyone awaits it; and before giving up we re-read localStorage, because an
+// installed PWA and a browser tab of the same app SHARE that storage — the
+// other instance may have already rotated and saved newer tokens we can adopt.
+let refreshing = null;
+function doRefresh() {
+  if (refreshing) return refreshing;
+  refreshing = (async () => {
+    if (!refresh) { access = null; persist(); return null; }
+    const used = refresh;
+    try {
+      const res = await call('/auth/refresh', { refresh_token: used });
+      access = res.access_token; refresh = res.refresh_token; persist();
+      return access;
+    } catch {
+      // Another instance of this app (PWA vs tab) may have rotated first and
+      // persisted the new pair — adopt it instead of logging the user out.
+      try {
+        const r = localStorage.getItem(lsKey());
+        if (r) {
+          const o = JSON.parse(r);
+          if (o && o.access && o.refresh && o.refresh !== used) {
+            const c = decodeJwt(o.access);
+            if (c && c.exp && c.exp > Math.floor(Date.now() / 1000) + 30) {
+              access = o.access; refresh = o.refresh;
+              return access;
+            }
+            access = o.access; refresh = o.refresh;
+            return doRefreshAgain();
+          }
+        }
+      } catch { /* fall through to sign-out */ }
+      access = null; refresh = null; persist(); notify(); return null;
+    } finally { refreshing = null; }
+  })();
+  return refreshing;
+}
+// One retry with tokens adopted from another instance (never recurses further:
+// a second failure falls through to the signed-out state above).
+async function doRefreshAgain() {
   if (!refresh) { access = null; persist(); return null; }
   try {
     const res = await call('/auth/refresh', { refresh_token: refresh });

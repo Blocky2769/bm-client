@@ -180,7 +180,11 @@ export function BankTopUp({ lang = 'en', defaultOpen = false, showDeposits = tru
           {acct && acct.topup?.url && (
             // Instant top-up: BM Pay advertises this ONLY while its gate is
             // open, so the button appears/disappears without an app release.
-            <a href={acct.topup.url} target="_blank" rel="noopener noreferrer"
+            // &return= brings the payer straight back to THIS screen from the
+            // BM Pay thank-you page ("Return to app"). Without it the only way
+            // back was the browser back arrow, which re-enters the paid BSP
+            // session and errors (found live 20 Oct, Dinau Buk/Konekt testing).
+            <a href={acct.topup.url + '&return=' + encodeURIComponent(window.location.href)} target="_blank" rel="noopener noreferrer"
               style={{ display: 'block', textAlign: 'center', background: '#047857', color: '#fff', borderRadius: 12, padding: '12px 14px', fontWeight: 800, fontSize: 14, textDecoration: 'none', margin: '0 0 4px' }}>
               ⚡ {t.payNow}
               <span style={{ display: 'block', fontWeight: 500, fontSize: 11, opacity: 0.9, marginTop: 2 }}>
