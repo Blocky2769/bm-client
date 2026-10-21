@@ -279,4 +279,20 @@ export function dropBmTokens() {
   access = null; refresh = null; persist(); notify();
 }
 
-export function logout() { access = null; refresh = null; bmSignOut(); clearActivity(); persist(); notify(); }
+// Sign out. Besides forgetting the tokens here, tell the IdP to revoke the refresh token (v1.18.0, independent login review 21 Oct
+// 2026: a refresh token copied before "logout" used to stay valid for 30 days). Best effort and never awaited: an old IdP
+// without /auth/logout, or no network, just leaves things as they were.
+function revokeAtIdp(rt, at, all) {
+  try {
+    const base = bmConfig().idpUrl;
+    if (!base || (!rt && !all)) return;
+    fetch(`${base}/auth/logout`, {
+      method: 'POST', keepalive: true,
+      headers: { 'content-type': 'application/json', ...(all && at ? { authorization: 'Bearer ' + at } : {}) },
+      body: JSON.stringify({ ...(rt ? { refresh_token: rt } : {}), ...(all ? { all: true } : {}) }),
+    }).catch(() => { /* offline / old IdP */ });
+  } catch { /* never block a logout */ }
+}
+export function logout() { const rt = refresh; revokeAtIdp(rt, null, false); access = null; refresh = null; bmSignOut(); clearActivity(); persist(); notify(); }
+// "Sign out everywhere" (a lost or borrowed phone): revokes EVERY refresh token of this person at the IdP, then signs out here.
+export function logoutEverywhere() { const rt = refresh, at = access; revokeAtIdp(rt, at, true); access = null; refresh = null; bmSignOut(); clearActivity(); persist(); notify(); }
