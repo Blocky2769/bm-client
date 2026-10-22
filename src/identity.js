@@ -107,20 +107,23 @@ export function submitIdentityDocument({ idType, country, fullName, dob, idNumbe
   return call('/identity/document', { method: 'POST', body });
 }
 
-// The current page without ?identity= (the flag the IdP adds after SevisPass).
+// Where SevisPass returns to: origin + pathname ONLY. The query string and #hash
+// can hold tokens (e.g. an OIDC ?code= or #access_token=), and the IdP stores
+// return_to, so they are never sent. Unparseable input → '' (the IdP then refuses).
 export function identityReturnUrl(href = typeof window !== 'undefined' ? window.location.href : '') {
-  try { const u = new URL(href); u.searchParams.delete('identity'); return u.toString(); }
-  catch { return href; }
+  try { const u = new URL(href); return u.origin + u.pathname; }
+  catch { return ''; }
 }
 
 /** Start SevisPass. Resolves the URL to send the browser to — the caller navigates
- *  (window.location.assign(url)). The IdP brings the person back to `returnTo` with
- *  ?identity=verified|failed. Throws IdentityError 'sevispass_not_ready' (503) until
+ *  (window.location.assign(url)). `returnTo` is cut to origin + pathname. After
+ *  SevisPass the IdP shows its own confirm page ("Link this national ID to BM ID
+ *  +675 ***123?"), then brings the person back to `returnTo` with ?identity=verified|failed. Throws IdentityError 'sevispass_not_ready' (503) until
  *  the IdP has SevisPass configured. */
 export async function startSevisPass({ returnTo, app } = {}) {
   const d = await call('/identity/sevispass/start', {
     method: 'POST',
-    body: { return_to: returnTo || identityReturnUrl(), app: app || bmConfig().app },
+    body: { return_to: identityReturnUrl(returnTo || undefined), app: app || bmConfig().app },   // a caller's returnTo is stripped too
   });
   if (!d.url) throw new IdentityError('failed', 'SevisPass did not return a link');
   return d.url;

@@ -121,11 +121,21 @@ test('network failure → offline; no body → status-based message', async () =
 
 test('startSevisPass: POST return_to + app, resolves the url', async () => {
   reset(() => ({ status: 200, body: { url: 'https://sevispass.example/authorize?x=1' } }));
-  const url = await id.startSevisPass({ returnTo: 'https://academy.test/exam?identity=failed&a=1', app: 'academy' });
+  const url = await id.startSevisPass({ returnTo: 'https://academy.test/exam?identity=failed&a=1#t=x', app: 'academy' });
   assert.equal(url, 'https://sevispass.example/authorize?x=1');
   assert.equal(calls[0].url, 'https://idp.test/identity/sevispass/start');
   assert.equal(calls[0].method, 'POST');
-  assert.deepEqual(calls[0].body, { return_to: 'https://academy.test/exam?identity=failed&a=1', app: 'academy' });
+  // query + hash never leave the page (they can hold tokens; the IdP stores return_to)
+  assert.deepEqual(calls[0].body, { return_to: 'https://academy.test/exam', app: 'academy' });
+});
+
+test('startSevisPass: default return_to is the current origin + pathname only', async () => {
+  globalThis.window = { location: { href: 'https://academy.test/exam/7?code=SECRET&state=s#access_token=TOK' } };
+  reset(() => ({ status: 200, body: { url: 'https://sevispass.example/a' } }));
+  await id.startSevisPass({});
+  delete globalThis.window;
+  assert.deepEqual(calls[0].body, { return_to: 'https://academy.test/exam/7', app: 'testapp' });
+  assert.ok(!JSON.stringify(calls[0].body).includes('SECRET') && !JSON.stringify(calls[0].body).includes('TOK'));
 });
 
 test('startSevisPass: 503 sevispass_not_ready → sevispass_not_ready; missing url → failed', async () => {
@@ -156,7 +166,9 @@ test('signed out → signed_out, no request', async () => {
 test('helpers: base64Bytes, identityReturnUrl, takeIdentityReturn', () => {
   assert.equal(id.base64Bytes(Buffer.alloc(10).toString('base64')), 10);
   assert.equal(id.base64Bytes('data:image/jpeg;base64,' + Buffer.alloc(11).toString('base64')), 11);
-  assert.equal(id.identityReturnUrl('https://a.test/x?identity=verified&b=2#h'), 'https://a.test/x?b=2#h');
+  assert.equal(id.identityReturnUrl('https://a.test/x?identity=verified&b=2#h'), 'https://a.test/x');
+  assert.equal(id.identityReturnUrl('https://a.test/?refresh_token=r#access_token=t'), 'https://a.test/');
+  assert.equal(id.identityReturnUrl('not a url'), '');
 
   let replaced = null;
   globalThis.window = {

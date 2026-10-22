@@ -113,8 +113,10 @@ SevisPass** only when the IdP reports `providers.sevispass.ready`, and **Use a p
 `providers.document.ready`: pick the ID type (PNG NID, PNG passport, PNG driver's licence, a passport from another country,
 other photo ID), the name as on the ID, date of birth, optional last 4 + expiry, then a photo of the ID (back camera) and a
 selfie (front camera), a consent line, and send. Photos are shrunk on the phone to ≤ 1280 px JPEG q0.8 (PNG data costs) and
-kept in memory only. After SevisPass the IdP returns to the page with `?identity=verified|failed`; the component reads it,
-removes it from the address bar and refreshes. `app` defaults to the `configureBm()` app id.
+kept in memory only. After SevisPass the IdP shows its own confirm page ("Link this national ID to BM ID +675 ***123?")
+and then returns to the page with `?identity=verified|failed`; the component reads it, removes it from the address bar and
+refreshes. No app change is needed for the confirm page. The return address sent to the IdP is **origin + pathname only**:
+the query string and `#hash` can hold tokens and the IdP stores `return_to`, so they are dropped (even from a `returnTo` you pass). `app` defaults to the `configureBm()` app id.
 
 Own UI instead? `useIdentityStatus()` plus the API:
 
@@ -122,7 +124,7 @@ Own UI instead? `useIdentityStatus()` plus the API:
 |---|---|
 | `identityStatus()` | `GET /identity/status` |
 | `submitIdentityDocument({ idType, country, fullName, dob, idNumberLast4, docExpiry, docJpeg, selfieJpeg, app })` | `POST /identity/document` (snake_case body, base64 without a `data:` prefix) |
-| `startSevisPass({ returnTo, app })` → url | `POST /identity/sevispass/start` — the caller does `location.assign(url)` |
+| `startSevisPass({ returnTo, app })` → url | `POST /identity/sevispass/start` — the caller does `location.assign(url)`; `return_to` = origin + pathname |
 | `withdrawIdentity()` | `POST /identity/withdraw` |
 | `resizeToJpeg(file, maxPx = 1280, quality = 0.8)` → base64 | on the phone (HEIC via `createImageBitmap`/`<img>`, EXIF rotation) |
 | `takeIdentityReturn()` → `'verified' \| 'failed' \| null` | reads + removes `?identity=` |
