@@ -25,3 +25,5 @@ export { toE164 } from './phone.js';
 export { default as PhoneInput, COUNTRIES, splitE164, isValidPhone } from './PhoneInput.jsx';
 export { VersionTag } from './VersionTag.jsx';
 export { BankTopUp, SwiftDetails, useBankTopUp } from './BankTopUp.jsx';   // bank + SWIFT top-up card — every app shows it
+export * from './identity.js';  // identityStatus, submitIdentityDocument, startSevisPass, withdrawIdentity, resizeToJpeg, takeIdentityReturn, IdentityError, ID_TYPES
+export { IdentityCheck, useIdentityStatus } from './IdentityCheck.jsx';   // BM ID identity check card (SevisPass or photo ID + selfie)

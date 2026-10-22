@@ -98,6 +98,42 @@ Wan PMV, Singsing, Yumitu, Niubalus Academy) now hold a BM token too: the IdP re
 `oidc.js` adopts them (`getToken()` then refreshes at the IdP like every other mode). Sessions from before this
 change have no BM token: the card says "sign out and sign in again" until the user does.
 
+### Identity check (v1.19.0) — `<IdentityCheck>` / `@bm/client/identity`
+ONE BM ID check shared by every app (Academy exams, Konekt agents, BM Pay limits, Rentim, …). Needs **BM IdP 1.11.0+**
+(contract: `Niubalus Drone Training School/research/briefs/bm-identity-contract.md`).
+
+```jsx
+import { IdentityCheck } from '@bm/client';           // or from '@bm/client/identity'
+<IdentityCheck lang={lang} onVerified={status => …} />   // 'en' | 'tpi'; renders nothing when signed out
+<IdentityCheck lang={lang} compact />                    // one slim line until the person taps Verify
+```
+
+It shows the status (none / pending / verified / rejected with the reason + Try again / expired). It offers **Verify with
+SevisPass** only when the IdP reports `providers.sevispass.ready`, and **Use a photo ID** whenever
+`providers.document.ready`: pick the ID type (PNG NID, PNG passport, PNG driver's licence, a passport from another country,
+other photo ID), the name as on the ID, date of birth, optional last 4 + expiry, then a photo of the ID (back camera) and a
+selfie (front camera), a consent line, and send. Photos are shrunk on the phone to ≤ 1280 px JPEG q0.8 (PNG data costs) and
+kept in memory only. After SevisPass the IdP returns to the page with `?identity=verified|failed`; the component reads it,
+removes it from the address bar and refreshes. `app` defaults to the `configureBm()` app id.
+
+Own UI instead? `useIdentityStatus()` plus the API:
+
+| Function | IdP call |
+|---|---|
+| `identityStatus()` | `GET /identity/status` |
+| `submitIdentityDocument({ idType, country, fullName, dob, idNumberLast4, docExpiry, docJpeg, selfieJpeg, app })` | `POST /identity/document` (snake_case body, base64 without a `data:` prefix) |
+| `startSevisPass({ returnTo, app })` → url | `POST /identity/sevispass/start` — the caller does `location.assign(url)` |
+| `withdrawIdentity()` | `POST /identity/withdraw` |
+| `resizeToJpeg(file, maxPx = 1280, quality = 0.8)` → base64 | on the phone (HEIC via `createImageBitmap`/`<img>`, EXIF rotation) |
+| `takeIdentityReturn()` → `'verified' \| 'failed' \| null` | reads + removes `?identity=` |
+
+Errors are `IdentityError` with a stable `code`: `already_pending` / `already_verified` (409), `too_big` (413, or > 1.5 MB on
+the phone), `not_jpeg` (415), `rate_limited` (429), `not_ready` / `sevispass_not_ready` (503), `offline`, `signed_out`,
+`unreadable`, `invalid`, `failed`. The component shows its own English / Tok Pisin text for each.
+
+🚨 The status in the browser is a UI hint (so is the `idv` token claim). An exam, money or a licence must check
+server-side with the IdP's `POST /identity/lookup`. Tests: `npm test` (`scripts/identity.test.mjs`, no dependencies).
+
 ### In-app messages (v1.10.0) — `@bm/client/notices`
 
 The standard BM inbox. WhatsApp (through the IdP's `/notify`) is how a message
