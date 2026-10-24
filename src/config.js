@@ -124,8 +124,25 @@ export async function bmSignIn(bmToken) {
   if (error) console.error('[bm/client] signInWithIdToken failed:', error.message);
   return { error };
 }
-export async function bmSignOut() {
+// The cloud session lives in localStorage under sb-<project>-auth-token (and -code-verifier / -user siblings).
+const SESSION_KEY = /^sb-.+-auth-token(-code-verifier|-user)?$/;
+function removeStoredSession() {
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (SESSION_KEY.test(k || '')) keys.push(k); }
+    for (const k of keys) localStorage.removeItem(k);
+  } catch { /* storage unavailable */ }
+}
+// End the cloud (Supabase) session. v1.18.1: signOut() does nothing when the phone has no signal - the session stayed in storage and renewed
+// itself when the signal came back, so a person who logged out (or whose idle hour ran out) was still signed in to the database (Bisnis Stoa
+// review batch B, AUTH-04). Now the stored session is removed whatever the signal. stillSignedOut() is asked first: if someone has signed
+// in again in the meantime, their session is theirs and is left alone.
+//   scope 'local' (the default, v1.18.1): end THIS device's session only. supabase-js's own default is 'global', which signed the person out of
+//   every other phone and tablet of theirs whenever one of them locked, idled out or was taken over by a PIN sign-in. logoutEverywhere() asks
+//   for 'global' on purpose.
+export async function bmSignOut(stillSignedOut = () => true, scope = 'local') {
   if (cfg.mode === 'accessToken') return;  // no Supabase session to end in accessToken mode
   if (!supabase) return;
-  try { await supabase.auth.signOut(); } catch { /* ignore */ }
+  try { await supabase.auth.signOut({ scope }); } catch { /* ignore */ }
+  if (stillSignedOut()) removeStoredSession();
 }

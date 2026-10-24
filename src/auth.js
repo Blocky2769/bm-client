@@ -24,7 +24,7 @@ function ensureRestored() {
   catch { /* ignore */ }
   // A session that idled out while the app was closed must not come back to life
   // on the next open (the stolen-handset case — see idle.js).
-  if (access && idleExpired()) { access = null; refresh = null; persist(); clearActivity(); }
+  if (access && idleExpired()) { access = null; refresh = null; persist(); clearActivity(); bmSignOut(() => !access); }
 }
 function persist() {
   try { access ? localStorage.setItem(lsKey(), JSON.stringify({ access, refresh })) : localStorage.removeItem(lsKey()); }
@@ -114,6 +114,16 @@ export async function verifyOtp(phone, code) {
 // everyone awaits it; and before giving up we re-read localStorage, because an
 // installed PWA and a browser tab of the same app SHARE that storage — the
 // other instance may have already rotated and saved newer tokens we can adopt.
+//
+// v1.18.1 (23 Oct 2026, Bisnis Stoa review batch B): only a refresh the IdP REFUSED ends the sign-in (400/401/403: the refresh token is invalid,
+// already used or revoked). A refresh that could not be MADE - no signal, a timeout, the IdP down (5xx) - used to end it too, so a till phone
+// was signed out whenever its 15-minute token ran out in a weak-signal spot (and, from this release, its cloud session with it). Now the
+// sign-in is kept, getToken() just has no fresh token for now, and the next call tries again.
+const refused = err => !!err && [400, 401, 403].includes(err.status);
+// A reply that does not carry BOTH tokens is not a renewal (a captive-portal page, a proxy, a half-deployed IdP answering 200 with something else).
+// Accepting it wiped the tokens and ended the sign-in without a word: it is treated like any other failed attempt instead.
+const goodPair = r => !!r && typeof r.access_token === 'string' && !!r.access_token && typeof r.refresh_token === 'string' && !!r.refresh_token;
+const unreadable = () => Object.assign(new Error('The sign-in service sent a reply with no tokens'), { status: 0 });
 let refreshing = null;
 function doRefresh() {
   if (refreshing) return refreshing;
@@ -122,9 +132,10 @@ function doRefresh() {
     const used = refresh;
     try {
       const res = await call('/auth/refresh', { refresh_token: used });
+      if (!goodPair(res)) throw unreadable();
       access = res.access_token; refresh = res.refresh_token; persist();
       return access;
-    } catch {
+    } catch (err) {
       // Another instance of this app (PWA vs tab) may have rotated first and
       // persisted the new pair — adopt it instead of logging the user out.
       try {
@@ -138,10 +149,13 @@ function doRefresh() {
               return access;
             }
             access = o.access; refresh = o.refresh;
-            return doRefreshAgain();
+            // awaited: `refreshing` must stay set until the retry is DONE, or a second caller starts its own refresh with the very token the retry is
+            // sending (a single-use token sent twice is refused the second time) - final review of 23 Oct 2026
+            return await doRefreshAgain();
           }
         }
-      } catch { /* fall through to sign-out */ }
+      } catch { /* fall through */ }
+      if (!refused(err)) return null;   // no signal / IdP down: the sign-in stays, there is just no fresh token right now
       access = null; refresh = null; persist(); notify(); return null;
     } finally { refreshing = null; }
   })();
@@ -153,9 +167,13 @@ async function doRefreshAgain() {
   if (!refresh) { access = null; persist(); return null; }
   try {
     const res = await call('/auth/refresh', { refresh_token: refresh });
+    if (!goodPair(res)) throw unreadable();
     access = res.access_token; refresh = res.refresh_token; persist();
     return access;
-  } catch { access = null; refresh = null; persist(); notify(); return null; }
+  } catch (err) {
+    if (!refused(err)) return null;
+    access = null; refresh = null; persist(); notify(); return null;
+  }
 }
 
 // Current BM JWT for API calls / the Supabase accessToken option.
@@ -293,6 +311,6 @@ function revokeAtIdp(rt, at, all) {
     }).catch(() => { /* offline / old IdP */ });
   } catch { /* never block a logout */ }
 }
-export function logout() { const rt = refresh; revokeAtIdp(rt, null, false); access = null; refresh = null; bmSignOut(); clearActivity(); persist(); notify(); }
+export function logout() { const rt = refresh; revokeAtIdp(rt, null, false); access = null; refresh = null; bmSignOut(() => !access); clearActivity(); persist(); notify(); }
 // "Sign out everywhere" (a lost or borrowed phone): revokes EVERY refresh token of this person at the IdP, then signs out here.
-export function logoutEverywhere() { const rt = refresh, at = access; revokeAtIdp(rt, at, true); access = null; refresh = null; bmSignOut(); clearActivity(); persist(); notify(); }
+export function logoutEverywhere() { const rt = refresh, at = access; revokeAtIdp(rt, at, true); access = null; refresh = null; bmSignOut(() => !access, 'global'); clearActivity(); persist(); notify(); }

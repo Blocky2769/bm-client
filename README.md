@@ -55,6 +55,19 @@ app was closed does not come back), and the activity stamp is shared across tabs
 `localStorage` (`${app}_bm_activity`). No per-app wiring — `configureBm()` starts it.
 Pass `idleTimeoutMs: 0` to disable.
 
+**v1.18.1:** coming back to the foreground (a tablet whose screen slept) first checks whether the idle limit has passed; it used to count the return as
+activity and start a fresh hour, so a tablet left signed in overnight stayed open for the next person.
+
+### Weak signal, and signing out (v1.18.1)
+- **Only a refusal ends the sign-in.** When the 15-minute token is renewed, a reply of 400, 401 or 403 from the IdP (the refresh token is invalid, already used
+  or revoked) signs the person out. No signal, a timeout, a 5xx, or a reply that does not carry both tokens (a captive-portal page) keeps the sign-in:
+  `getToken()` simply has no fresh token for now and the next call tries again. (These used to sign the person out.)
+- **Logging out ends the cloud session too, with or without signal.** `bmSignOut` removes the stored Supabase session (`sb-*-auth-token`) as well, because
+  `supabase.auth.signOut()` does nothing offline and the session would renew itself later. `logout()` ends THIS device only (scope `local`);
+  `logoutEverywhere()` asks for every device (scope `global`).
+- A refresh token the IdP has already used is not sent twice: while a retry with tokens adopted from another open copy of the app is running, other
+  callers wait for it.
+
 ```js
 // anywhere:
 import { requestOtp, verifyOtp, requestOtpSms, getToken, logout, onAuthChange,

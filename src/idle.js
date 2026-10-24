@@ -65,7 +65,16 @@ export function startIdleWatch() {
   if (!bmConfig().idleTimeoutMs) return;
   installed = true;
 
-  const bump = () => markActivity();
+  // v1.18.1 (Bisnis Stoa independent review, 23 Oct 2026): a session that idled out while the screen was off or the app was in the background must
+  // END when the person comes back, not start a fresh hour. A sleeping phone runs no timers, so the 30 s check has not had its turn, and
+  // counting the return (or the first tap) as activity BEFORE looking at the old stamp hid the long gap: a tablet left signed in stayed open for
+  // the next person. Look at the stamp first; the look is limited to once every 2 s so scrolling does not read storage on every event.
+  let lastLook = 0;
+  const bump = () => {
+    const now = Date.now();
+    if (now - lastLook > 2000) { lastLook = now; if (idleExpired()) { enforce(); return; } }
+    markActivity();
+  };
   // capture:true so activity counts even if a handler stops propagation.
   ['pointerdown', 'keydown', 'touchstart', 'wheel'].forEach(e =>
     window.addEventListener(e, bump, { passive: true, capture: true }));
