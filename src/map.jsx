@@ -43,19 +43,28 @@ const TILES = {
     { maxZoom: 19, subdomains: 'abcd', attribution: '© OpenStreetMap · © CARTO' }],
 };
 
+// Marker content is ALWAYS text, never HTML (v1.18.2, Codex review 8 Nov 2026). Labels come from people — an agent's or hotspot's
+// name in Konekt — and Leaflet puts a string `html` / tooltip in as markup, so a name carrying a script ran in every viewer's app
+// and could read their BM sign-in. Build the elements here and set text with textContent; a colour goes in through the style
+// property, where anything that is not a colour is simply ignored by the browser.
+function textDiv(cls, text) {
+  const d = document.createElement('div');
+  d.className = cls;
+  d.textContent = text == null ? '' : String(text);
+  return d;
+}
 function iconFor(p, active) {
   if (p.emoji && !p.pill) {
-    const color = p.color || '#22D3EE';
-    return L.divIcon({
-      className: 'bm-pin-wrap', iconSize: [26, 26], iconAnchor: [13, 13],
-      html: `<div class="bm-dot ${p.pulse ? 'bm-dot-pulse' : ''}" style="background:${color};color:${color}">${p.emoji}</div>`,
-    });
+    const d = textDiv('bm-dot' + (p.pulse ? ' bm-dot-pulse' : ''), p.emoji);
+    d.style.background = '#22D3EE'; d.style.color = '#22D3EE';    // default, kept when p.color is not a valid colour
+    if (p.color) { d.style.background = String(p.color); d.style.color = String(p.color); }
+    return L.divIcon({ className: 'bm-pin-wrap', iconSize: [26, 26], iconAnchor: [13, 13], html: d });
   }
-  return L.divIcon({
-    className: 'bm-pin-wrap', iconSize: [0, 0],
-    html: `<div class="bm-pin ${p.dark ? 'bm-pin-dark' : ''} ${active ? 'bm-pin-on' : ''}">${p.pill ?? ''}</div>`,
-  });
+  const d = textDiv('bm-pin' + (p.dark ? ' bm-pin-dark' : '') + (active ? ' bm-pin-on' : ''), p.pill ?? '');
+  return L.divIcon({ className: 'bm-pin-wrap', iconSize: [0, 0], html: d });
 }
+// Tooltip as a text node — bindTooltip(string) would be parsed as HTML.
+const tipFor = text => { const s = document.createElement('span'); s.textContent = String(text); return s; };
 
 // The shared map. `fit`: 'points' fits the bounds of all points (falls back to
 // the whole-PNG view when empty); 'none' uses center/zoom (or PNG view).
@@ -118,7 +127,7 @@ export function BmMap({
     for (const p of pts) {
       const mk = L.marker([p.lat, p.lng], { icon: iconFor(p, activeId != null && activeId === p.id), riseOnHover: true, zIndexOffset: p.pulse ? 1000 : 0 })
         .on('click', () => onPoint?.(p));
-      if (p.tooltip) mk.bindTooltip(p.tooltip, { direction: 'top', offset: [0, -10] });
+      if (p.tooltip) mk.bindTooltip(tipFor(p.tooltip), { direction: 'top', offset: [0, -10] });
       mk.addTo(g);
     }
     if (!(fit === 'points' && pts.length && (refit || !didFit.current))) return;

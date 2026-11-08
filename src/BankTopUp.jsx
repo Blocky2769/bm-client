@@ -141,6 +141,22 @@ export function SwiftDetails({ swift, crn, lang = 'en', style }) {
   );
 }
 
+// v1.18.2 (Codex review, 8 Nov 2026): the "Pay now" link comes from the server, and the button used to open whatever it said.
+// Only an https page on BM's own domain (or a host the app names in configureBm({ payHosts: [...] }), e.g. a staging BM Pay) is
+// shown now; anything else hides the button. The return link is the app's own address WITHOUT its ?query (sign-in codes and other
+// details sit there) - only a #/route is kept, for hash-routed apps.
+const okPayHost = h => h === 'blockchainmelanesia.com' || h.endsWith('.blockchainmelanesia.com') || (bmConfig().payHosts || []).includes(h);
+export function topUpHref(raw) {
+  try {
+    const u = new URL(String(raw));
+    if (u.protocol !== 'https:' || u.username || u.password || !okPayHost(u.hostname)) return null;
+    const here = window.location;
+    const hash = here.hash && here.hash.startsWith('#/') ? here.hash : '';
+    u.searchParams.set('return', here.origin + here.pathname + hash);
+    return u.toString();
+  } catch { return null; }
+}
+
 const fmtDate = iso => (iso ? new Date(iso).toLocaleDateString('en-PG', { day: 'numeric', month: 'short' }) : '');
 
 /** The standard card. Collapsed by default (defaultOpen to start open). */
@@ -150,6 +166,7 @@ export function BankTopUp({ lang = 'en', defaultOpen = false, showDeposits = tru
   const { acct, deposits, error, loading, signedIn, relogin } = useBankTopUp({ demo, deposits: showDeposits });
   if (!signedIn) return null;
   const pct = acct ? Math.round((acct.fee_pct || 0) * 10000) / 100 : 0;
+  const payHref = acct && acct.topup?.url ? topUpHref(acct.topup.url) : null;
   // tone="dark": a raised 3D emerald key for apps with a dark home screen (the default light card looks pasted on there).
   // Gradient face, darker edge, top highlight, drop shadow; the details open in a light panel so they stay readable.
   const dark = tone === 'dark';
@@ -177,14 +194,14 @@ export function BankTopUp({ lang = 'en', defaultOpen = false, showDeposits = tru
           {loading && <p style={S.muted}>{t.loading}</p>}
           {relogin && <p style={{ ...S.small, color: '#92400e' }}>ℹ️ {t.relogin}</p>}
           {error && <p style={{ ...S.small, color: '#b91c1c' }}>⚠️ {error}</p>}
-          {acct && acct.topup?.url && (
+          {payHref && (
             // Instant top-up: BM Pay advertises this ONLY while its gate is
             // open, so the button appears/disappears without an app release.
             // &return= brings the payer straight back to THIS screen from the
             // BM Pay thank-you page ("Return to app"). Without it the only way
             // back was the browser back arrow, which re-enters the paid BSP
             // session and errors (found live 20 Oct, Dinau Buk/Konekt testing).
-            <a href={acct.topup.url + '&return=' + encodeURIComponent(window.location.href)} target="_blank" rel="noopener noreferrer"
+            <a href={payHref} target="_blank" rel="noopener noreferrer"
               style={{ display: 'block', textAlign: 'center', background: '#047857', color: '#fff', borderRadius: 12, padding: '12px 14px', fontWeight: 800, fontSize: 14, textDecoration: 'none', margin: '0 0 4px' }}>
               ⚡ {t.payNow}
               <span style={{ display: 'block', fontWeight: 500, fontSize: 11, opacity: 0.9, marginTop: 2 }}>

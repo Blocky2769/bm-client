@@ -99,6 +99,8 @@ and **Paying from overseas? (SWIFT)** — BM's BSP account + BIC with the CRN as
 `bankTopUp()` / `bankTopUpDeposits()` → BM IdP `GET /wallet/topup` (1.8.0+), which forwards the user's own token to
 BM Pay `/biller/account`. Never call BM Pay `/biller/*` from the browser (BM Pay allows no app origins).
 Own UI instead? `useBankTopUp()` + `<SwiftDetails swift crn lang />`. Inline styles, so it works with or without Tailwind.
+The **Pay now** button only opens an https link on `blockchainmelanesia.com` (v1.18.2). A staging BM Pay on another host must be named
+in `configureBm({ payHosts: ['bm-pay-staging.example.app'] })`, or the button stays hidden.
 
 **Before BSP issues the biller code (v1.14.0):** while BM Pay has no `BSP_BILLER_CODE`, the card shows **Pay by bank
 transfer** instead of "Pay a bill": BM's BSP account name + number with the customer's CRN as the reference (BM Pay

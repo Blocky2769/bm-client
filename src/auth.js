@@ -20,11 +20,26 @@ const lsKey = () => `${bmConfig().app}_bm_auth`;
 function ensureRestored() {
   if (restored) return;
   restored = true;
-  try { const r = localStorage.getItem(lsKey()); if (r) { const o = JSON.parse(r); access = o.access; refresh = o.refresh; } }
-  catch { /* ignore */ }
+  // Only a pair of non-empty strings is a session; anything else in storage is dropped (v1.18.2).
+  const str = v => typeof v === 'string' && v ? v : null;
+  try { const r = localStorage.getItem(lsKey()); if (r) { const o = JSON.parse(r); access = str(o && o.access); refresh = str(o && o.refresh); if (!access) { refresh = null; persist(); } } }
+  catch { access = null; refresh = null; persist(); }
   // A session that idled out while the app was closed must not come back to life
   // on the next open (the stolen-handset case — see idle.js).
   if (access && idleExpired()) { access = null; refresh = null; persist(); clearActivity(); bmSignOut(() => !access); }
+  // v1.18.2: a sign-out in another tab / the installed PWA of this app (it removes the shared key) signs this one out too. Before,
+  // this copy kept its tokens in memory, carried on, and its next refresh wrote a fresh pair back into storage - so the app was
+  // signed in again on the next open. Its own refresh token may be newer than the one the other copy revoked: revoke it as well.
+  try {
+    window.addEventListener('storage', e => {
+      if (e.key !== lsKey() || e.newValue !== null || (!access && !refresh)) return;
+      const rt = refresh;
+      gen++; access = null; refresh = null; refreshing = null;
+      revokeAtIdp(rt, null, false);
+      bmSignOut(() => !access);   // and this copy's cloud (Supabase) session - unless someone has signed in again meanwhile
+      notify();
+    });
+  } catch { /* no window (server / tests) */ }
 }
 function persist() {
   try { access ? localStorage.setItem(lsKey(), JSON.stringify({ access, refresh })) : localStorage.removeItem(lsKey()); }
@@ -94,12 +109,22 @@ export async function requestOtpSms(phone) {
   } catch { return false; }
 }
 
+// Every sign-in method ends here (v1.18.2). The cloud (Supabase) session is made while we wait; if the person logged out in that
+// moment, the logout wins: the half-made cloud session is ended and nothing is saved.
+async function signIn(acc, ref) {
+  gen++; const g = gen; refreshing = null;   // a refresh still on the wire belongs to the old session
+  access = acc; refresh = ref;
+  await bmSignIn(acc);   // bridge into a Supabase session before listeners query data
+  if (g !== gen) { if (!access) bmSignOut(() => !access); return false; }
+  markActivity();        // start the idle clock for this session
+  persist(); notify();
+  return true;
+}
+const SIGNED_OUT = () => ({ ok: false, error: 'signed_out' });
+
 export async function verifyOtp(phone, code) {
   const res = await call('/auth/verify-otp', { phone, code, app: bmConfig().app });
-  access = res.access_token; refresh = res.refresh_token;
-  await bmSignIn(access);  // bridge into a Supabase session before listeners query data
-  markActivity();          // start the idle clock for this session
-  persist(); notify();
+  if (!(await signIn(res.access_token, res.refresh_token))) return SIGNED_OUT();
   return { ok: true, claims: decodeJwt(access), user_id: res.user_id };
 }
 
@@ -125,17 +150,30 @@ const refused = err => !!err && [400, 401, 403].includes(err.status);
 const goodPair = r => !!r && typeof r.access_token === 'string' && !!r.access_token && typeof r.refresh_token === 'string' && !!r.refresh_token;
 const unreadable = () => Object.assign(new Error('The sign-in service sent a reply with no tokens'), { status: 0 });
 let refreshing = null;
+// v1.18.2 (Codex review, 8 Nov 2026): `gen` changes whenever the session changes hands - sign-in, sign-out, tokens adopted or dropped.
+// A refresh captures it when it starts; an answer that comes back after it changed belongs to a session that is gone. Before, a
+// logout while a refresh was on the wire was undone the moment the answer arrived: the new pair was saved and the person was
+// signed in again on that phone. Such an answer is now never saved, and the refresh token it carries is revoked at the IdP.
+let gen = 0;
+function stale(g, res) {
+  if (g === gen) return false;
+  if (res && typeof res.refresh_token === 'string' && res.refresh_token) revokeAtIdp(res.refresh_token, null, false);
+  return true;
+}
 function doRefresh() {
   if (refreshing) return refreshing;
-  refreshing = (async () => {
-    if (!refresh) { access = null; persist(); return null; }
+  if (!refresh) { access = null; persist(); return Promise.resolve(null); }
+  const g = gen;
+  const p = (async () => {
     const used = refresh;
     try {
       const res = await call('/auth/refresh', { refresh_token: used });
       if (!goodPair(res)) throw unreadable();
+      if (stale(g, res)) return null;
       access = res.access_token; refresh = res.refresh_token; persist();
       return access;
     } catch (err) {
+      if (g !== gen) return null;   // signed out (or someone else signed in) meanwhile: leave that state alone
       // Another instance of this app (PWA vs tab) may have rotated first and
       // persisted the new pair — adopt it instead of logging the user out.
       try {
@@ -151,26 +189,29 @@ function doRefresh() {
             access = o.access; refresh = o.refresh;
             // awaited: `refreshing` must stay set until the retry is DONE, or a second caller starts its own refresh with the very token the retry is
             // sending (a single-use token sent twice is refused the second time) - final review of 23 Oct 2026
-            return await doRefreshAgain();
+            return await doRefreshAgain(g);
           }
         }
       } catch { /* fall through */ }
       if (!refused(err)) return null;   // no signal / IdP down: the sign-in stays, there is just no fresh token right now
       access = null; refresh = null; persist(); notify(); return null;
-    } finally { refreshing = null; }
+    } finally { if (refreshing === p) refreshing = null; }   // a logout may already have let a newer refresh start
   })();
-  return refreshing;
+  refreshing = p;
+  return p;
 }
 // One retry with tokens adopted from another instance (never recurses further:
 // a second failure falls through to the signed-out state above).
-async function doRefreshAgain() {
+async function doRefreshAgain(g) {
   if (!refresh) { access = null; persist(); return null; }
   try {
     const res = await call('/auth/refresh', { refresh_token: refresh });
     if (!goodPair(res)) throw unreadable();
+    if (stale(g, res)) return null;
     access = res.access_token; refresh = res.refresh_token; persist();
     return access;
   } catch (err) {
+    if (g !== gen) return null;
     if (!refused(err)) return null;
     access = null; refresh = null; persist(); notify(); return null;
   }
@@ -191,14 +232,12 @@ export async function getToken() {
 // ── Non-phone identity (email+password+TOTP, WebAuthn) + QR device-link ────
 export async function registerEmail(email, password, name) {
   const res = await call('/auth/register-email', { email, password, name, app: bmConfig().app });
-  access = res.access_token; refresh = res.refresh_token;
-  await bmSignIn(access); markActivity(); persist(); notify();
+  if (!(await signIn(res.access_token, res.refresh_token))) return SIGNED_OUT();
   return { ok: true, claims: decodeJwt(access), user_id: res.user_id };
 }
 export async function loginEmail(email, password) {
   const res = await call('/auth/login-email', { email, password, app: bmConfig().app });
-  access = res.access_token; refresh = res.refresh_token;
-  await bmSignIn(access); markActivity(); persist(); notify();
+  if (!(await signIn(res.access_token, res.refresh_token))) return SIGNED_OUT();
   return { ok: true, claims: decodeJwt(access), user_id: res.user_id };
 }
 
@@ -210,7 +249,7 @@ export async function enrolTotp(currentCode) {
 export async function verifyTotp(code) {
   try {
     const res = await call('/mfa/totp/verify', { code }, { authorization: 'Bearer ' + access });
-    access = res.access_token; refresh = res.refresh_token; markActivity(); persist(); notify();
+    gen++; access = res.access_token; refresh = res.refresh_token; markActivity(); persist(); notify();
     return { ok: true };
   } catch (e) {
     if (e.status === 404) return { ok: false, missing: true };
@@ -233,8 +272,7 @@ export async function webauthnRegister(email) {
   const { options } = await call('/auth/webauthn/register-options', access ? {} : { email }, auth);
   const response = await startRegistration({ optionsJSON: options });
   const res = await call('/auth/webauthn/register-verify', { email, app: bmConfig().app, response }, auth);
-  access = res.access_token; refresh = res.refresh_token;
-  await bmSignIn(access); markActivity(); persist(); notify();
+  if (!(await signIn(res.access_token, res.refresh_token))) return SIGNED_OUT();
   return { ok: true, claims: decodeJwt(access), user_id: res.user_id };
 }
 // Sign in with a passkey. `email` is OPTIONAL: without it the browser offers any BM passkey saved on this device (discoverable
@@ -244,8 +282,7 @@ export async function webauthnLogin(email) {
   const { options, challenge_id } = await call('/auth/webauthn/login-options', email ? { email } : {});
   const response = await startAuthentication({ optionsJSON: options });
   const res = await call('/auth/webauthn/login-verify', { email: email || undefined, app: bmConfig().app, response, challenge_id });
-  access = res.access_token; refresh = res.refresh_token;
-  await bmSignIn(access); markActivity(); persist(); notify();
+  if (!(await signIn(res.access_token, res.refresh_token))) return SIGNED_OUT();
   return { ok: true, claims: decodeJwt(access), user_id: res.user_id };
 }
 // Passkeys are bound to blockchainmelanesia.com: a page on netlify.app (or another domain) cannot use them.
@@ -268,9 +305,7 @@ export async function pollQrPairing(pairingId, { intervalMs = 2000, timeoutMs = 
     if (r.status === 404) return false; // expired
     const data = await r.json().catch(() => ({}));
     if (data.status === 'approved') {
-      access = data.access_token; refresh = data.refresh_token;
-      await bmSignIn(access); markActivity(); persist(); notify();
-      return true;
+      return signIn(data.access_token, data.refresh_token);
     }
     await new Promise(res => setTimeout(res, intervalMs));
   }
@@ -288,13 +323,13 @@ export async function approveQrPairing(pairingId) {
 export function adoptBmTokens(acc, ref) {
   ensureRestored();
   if (!acc || acc === access) return;
-  access = acc; if (ref) refresh = ref;
+  gen++; refreshing = null; access = acc; if (ref) refresh = ref;
   markActivity(); persist(); notify();
 }
 export function dropBmTokens() {
   ensureRestored();
   if (!access && !refresh) return;
-  access = null; refresh = null; persist(); notify();
+  gen++; refreshing = null; access = null; refresh = null; persist(); notify();
 }
 
 // Sign out. Besides forgetting the tokens here, tell the IdP to revoke the refresh token (v1.18.0, independent login review 21 Oct
@@ -311,6 +346,6 @@ function revokeAtIdp(rt, at, all) {
     }).catch(() => { /* offline / old IdP */ });
   } catch { /* never block a logout */ }
 }
-export function logout() { const rt = refresh; revokeAtIdp(rt, null, false); access = null; refresh = null; bmSignOut(() => !access); clearActivity(); persist(); notify(); }
+export function logout() { gen++; refreshing = null; const rt = refresh; revokeAtIdp(rt, null, false); access = null; refresh = null; bmSignOut(() => !access); clearActivity(); persist(); notify(); }
 // "Sign out everywhere" (a lost or borrowed phone): revokes EVERY refresh token of this person at the IdP, then signs out here.
-export function logoutEverywhere() { const rt = refresh, at = access; revokeAtIdp(rt, at, true); access = null; refresh = null; bmSignOut(() => !access, 'global'); clearActivity(); persist(); notify(); }
+export function logoutEverywhere() { gen++; refreshing = null; const rt = refresh, at = access; revokeAtIdp(rt, at, true); access = null; refresh = null; bmSignOut(() => !access, 'global'); clearActivity(); persist(); notify(); }
