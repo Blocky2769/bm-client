@@ -27,8 +27,20 @@ export const payeeBalance = owner => call('/wallet/payee-balance?owner=' + encod
 
 // Pay `amount` from the caller's wallet to `payee`, tagged with `ref`. The
 // server applies the app fee_rate keyed on the configured app id.
-export const pay = (payee, amount, ref) =>
-  call('/wallet/pay', { method: 'POST', body: { payee, app: bmConfig().app, amount, ref } });
+// Every payment carries an idempotency key (`idem`): pass your own (e.g. the
+// booking id) so a second tap on "Pay" can never charge twice, or let this make
+// one. If the network drops before the answer arrives, the SAME request is sent
+// once more — the IdP answers a repeat key with the original payment, never a
+// second one. (BM IdP will require `idem` on /wallet/pay; Codex review 8 Nov 2026.)
+const newIdem = () => 'pay:' + (globalThis.crypto?.randomUUID?.() || (Date.now().toString(36) + Math.random().toString(36).slice(2, 12)));
+export const pay = async (payee, amount, ref, idem = newIdem()) => {
+  const req = { method: 'POST', body: { payee, app: bmConfig().app, amount, ref, idem } };
+  try { return await call('/wallet/pay', req); }
+  catch (e) {
+    if (!(e instanceof TypeError)) throw e; // fetch's network failure; a refusal from the IdP is never retried
+    return call('/wallet/pay', req);
+  }
+};
 
 // Redeem a single-use Konekt voucher into the caller's wallet.
 export const redeemVoucher = code =>
