@@ -68,6 +68,27 @@ activity and start a fresh hour, so a tablet left signed in overnight stayed ope
 - A refresh token the IdP has already used is not sent twice: while a retry with tokens adopted from another open copy of the app is running, other
   callers wait for it.
 
+### Sign-in can now answer "signed out" (v1.18.2) — check every sign-in call
+If the person logs out (or another tab signs them out) while a sign-in is still finishing, the logout wins: nothing is
+saved and the sign-in call tells you so instead of reporting success. Since v1.18.2:
+
+- `verifyOtp`, `loginEmail`, `registerEmail`, `webauthnLogin`, `webauthnRegister` can resolve
+  `{ ok: false, error: 'signed_out' }` (before, they only ever resolved `{ ok: true, … }` or threw).
+- `pollQrPairing` resolves `false` in the same case.
+
+What each app must do: treat it as "not signed in" and **show the sign-in screen again** — clear the "Checking…" spinner,
+don't show an error, don't navigate as if the person were signed in. Code that only checks for a thrown error, or reads
+`res.claims` / `res.user_id` without looking at `res.ok`, must check `res.ok` first:
+
+```js
+const res = await verifyOtp(phone, code);
+if (!res.ok) { setBusy(false); return showSignIn(); }   // 'signed_out': start again, no error message
+```
+
+Worked example: Konekt [PR #3](https://github.com/Blocky2769/konekt-app/pull/3) handles it in 7 places (`src/auth.jsx`,
+`src/agentAuth.jsx`, `src/components/VerifyPhone.jsx`, the captive portal and the buyer screens). Check this when you bump an
+app to v1.18.2 or later.
+
 ```js
 // anywhere:
 import { requestOtp, verifyOtp, requestOtpSms, getToken, logout, onAuthChange,
